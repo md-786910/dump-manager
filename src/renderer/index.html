@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none';"
+    />
+    <title>Dump Manager</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="theme-dark">
+    <header class="app-bar">
+      <div class="app-bar__title" id="appBarTitle">dbManager</div>
+      <div class="app-bar__spacer"></div>
+      <button
+        class="iconbtn"
+        id="btnSettings"
+        title="Settings"
+        aria-label="Settings"
+      >
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="8" cy="8" r="2" />
+          <path
+            d="M13 8a4.9 4.9 0 00-.1-1l1.3-1-1.5-2.6-1.6.5a4.9 4.9 0 00-1.7-1L9 1H7l-.4 1.8a4.9 4.9 0 00-1.7 1L3.3 3.4 1.8 6l1.3 1A4.9 4.9 0 003 8a4.9 4.9 0 00.1 1l-1.3 1 1.5 2.6 1.6-.5a4.9 4.9 0 001.7 1L7 15h2l.4-1.8a4.9 4.9 0 001.7-1l1.6.5 1.5-2.6-1.3-1c.1-.3.1-.7.1-1.1z"
+          />
+        </svg>
+      </button>
+    </header>
+
+    <main class="layout">
+      <aside class="panel panel--profiles">
+        <div class="panel__head">
+          <span class="panel__title">Profiles</span>
+        </div>
+        <div class="tree" id="serverTree"></div>
+        <div class="empty" id="serverEmpty" hidden>
+          <p class="empty__text">No servers yet.</p>
+          <button class="btn btn--primary btn--sm" id="btnNewServerEmpty">
+            Add your first server
+          </button>
+        </div>
+        <div class="panel__foot">
+          <button class="btn btn--ghost btn--sm" id="btnNewServer">
+            + Server
+          </button>
+          <button class="btn btn--ghost btn--sm" id="btnNewTarget">
+            + Target
+          </button>
+        </div>
+      </aside>
+
+      <section class="panel panel--main" id="mainPanel">
+        <div class="empty empty--center" id="mainEmpty">
+          <p class="empty__text">Select a target to begin.</p>
+        </div>
+
+        <div class="profile-view" id="profileView" hidden>
+          <header class="profile-view__head">
+            <div>
+              <h2 class="profile-view__name mono" id="pvName"></h2>
+              <p class="profile-view__sub" id="pvSub"></p>
+            </div>
+            <span class="tag" id="pvTag"></span>
+          </header>
+
+          <div class="profile-view__actions">
+            <button class="btn btn--primary" id="btnBackupNow">
+              Backup now
+            </button>
+            <button class="btn btn--ghost" id="btnEditTarget">Edit</button>
+            <button class="btn btn--ghost" id="btnDeleteTarget">Delete</button>
+          </div>
+
+          <div class="op-panel" id="opPanel" hidden>
+            <div class="op-panel__row">
+              <span class="op-panel__label" id="opPhase">Idle</span>
+              <span class="op-panel__actions">
+                <button type="button" class="btn btn--ghost btn--sm" id="opCancelBtn" hidden>Cancel</button>
+                <button type="button" class="iconbtn iconbtn--xs" id="opDismissBtn" hidden aria-label="Dismiss">
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+                </button>
+              </span>
+            </div>
+            <div class="op-panel__bar">
+              <div class="op-panel__bar-inner" id="opBar"></div>
+            </div>
+            <div class="op-panel__stats mono">
+              <span id="opBytes"></span>
+              <span class="op-panel__sep" id="opRateSep" hidden>·</span>
+              <span id="opRate"></span>
+              <span class="op-panel__sep" id="opElapsedSep" hidden>·</span>
+              <span id="opElapsed"></span>
+              <span class="op-panel__sep" id="opEtaSep" hidden>·</span>
+              <span id="opEta"></span>
+            </div>
+            <pre class="op-panel__error mono" id="opError" hidden></pre>
+          </div>
+
+          <div class="panel__head" style="padding-left: 0; padding-right: 0">
+            <span class="panel__title">Dumps</span>
+            <span class="panel__subtitle mono" id="dumpCount">0</span>
+          </div>
+          <ul class="dump-list" id="dumpList"></ul>
+          <div class="empty" id="dumpEmpty">
+            <p class="empty__text">No dumps yet for this target.</p>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel panel--activity">
+        <div class="panel__head">
+          <span class="panel__title">Activity</span>
+        </div>
+        <ul class="activity-list" id="activityList"></ul>
+        <div class="empty" id="activityEmpty">
+          <p class="empty__text">No activity yet.</p>
+        </div>
+      </aside>
+    </main>
+
+    <section class="logs-drawer" id="logsDrawer" hidden>
+      <header class="logs-drawer__head">
+        <div class="logs-drawer__title">
+          <span class="panel__title">Logs</span>
+          <span class="logs-drawer__count mono" id="logsCount">0</span>
+        </div>
+        <div class="logs-drawer__filters" role="tablist">
+          <button class="chip chip--active" data-level="all">All</button>
+          <button class="chip" data-level="info">Info</button>
+          <button class="chip" data-level="warn">Warn</button>
+          <button class="chip" data-level="error">Error</button>
+          <button class="chip" data-level="debug">Debug</button>
+        </div>
+        <input class="input input--sm logs-drawer__search" id="logsSearch" type="search" placeholder="Filter…" />
+        <button class="btn btn--ghost btn--sm" id="logsAutoscrollBtn" title="Toggle autoscroll">Autoscroll: on</button>
+        <button class="btn btn--ghost btn--sm" id="logsClearBtn" title="Clear visible log buffer">Clear</button>
+        <button class="iconbtn" id="logsCloseBtn" aria-label="Close logs">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+        </button>
+      </header>
+      <div class="logs-drawer__body" id="logsBody"></div>
+    </section>
+
+    <footer class="status-bar">
+      <span class="status-bar__left" id="statusLeft">Idle</span>
+      <button class="status-bar__btn" id="logsToggleBtn" title="Show event log">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:6px"><path d="M2 4h8M2 6h6M2 8h8"/></svg>
+        Logs <span class="status-bar__badge mono" id="logsBadge">0</span>
+      </button>
+      <span class="status-bar__right mono" id="runtime">—</span>
+    </footer>
+
+    <!-- Server editor modal -->
+    <div class="modal" id="serverModal" hidden>
+      <div class="modal__backdrop"></div>
+      <div
+        class="modal__card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="serverModalTitle"
+      >
+        <header class="modal__head">
+          <h3 class="modal__title" id="serverModalTitle">New server</h3>
+          <button class="iconbtn" id="serverModalClose" aria-label="Close">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            >
+              <path d="M3 3l8 8M11 3l-8 8" />
+            </svg>
+          </button>
+        </header>
+        <form class="form" id="serverForm">
+          <section class="form__section">
+            <h4 class="form__legend">Identity</h4>
+            <label class="form__field">
+              <span class="form__label">Server name</span>
+              <input
+                class="input"
+                name="name"
+                required
+                placeholder="vmi3269642"
+              />
+              <span class="form__hint"
+                >A short label you'll recognize in the sidebar.</span
+              >
+            </label>
+          </section>
+
+          <section class="form__section">
+            <h4 class="form__legend">SSH</h4>
+            <div class="form__row">
+              <label class="form__field">
+                <span class="form__label">Host</span>
+                <input
+                  class="input mono"
+                  name="host"
+                  required
+                  placeholder="vps.example.com"
+                />
+              </label>
+              <label class="form__field form__field--narrow">
+                <span class="form__label">Port</span>
+                <input class="input mono" name="port" placeholder="22" />
+              </label>
+            </div>
+            <label class="form__field">
+              <span class="form__label">SSH user</span>
+              <input
+                class="input mono"
+                name="user"
+                required
+                placeholder="root"
+              />
+            </label>
+            <div class="form__field">
+              <span class="form__label">Private key file</span>
+              <div class="form__input-row">
+                <input
+                  class="input mono"
+                  name="privateKeyPath"
+                  placeholder="No key selected"
+                  readonly
+                />
+                <button type="button" class="btn btn--ghost" id="btnPickKey">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="margin-right: 6px; vertical-align: -2px"
+                  >
+                    <path
+                      d="M2 4.5A1.5 1.5 0 013.5 3h2.379a1.5 1.5 0 011.06.44l1.122 1.12A1.5 1.5 0 009.12 5H12.5A1.5 1.5 0 0114 6.5v5A1.5 1.5 0 0112.5 13h-9A1.5 1.5 0 012 11.5v-7z"
+                    />
+                  </svg>
+                  Choose key
+                </button>
+              </div>
+              <span class="form__hint"
+                >The file stays where it is — never copied into dbManager.</span
+              >
+            </div>
+          </section>
+
+          <section class="form__section">
+            <h4 class="form__legend">Docker</h4>
+            <label class="form__checkbox">
+              <input type="checkbox" name="sudoForDocker" />
+              <span>
+                <span class="form__checkbox-label"
+                  >Run docker with <span class="mono">sudo</span></span
+                >
+                <span class="form__hint"
+                  >Enable if the SSH user can't run
+                  <span class="mono">docker</span> directly.</span
+                >
+              </span>
+            </label>
+          </section>
+
+          <footer class="modal__foot">
+            <p class="modal__error" id="serverFormError" hidden></p>
+            <div class="modal__foot-spacer"></div>
+            <button type="button" class="btn btn--ghost" id="serverFormCancel">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn btn--primary"
+              id="serverFormSubmit"
+            >
+              Save
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+
+    <!-- Target editor modal -->
+    <div class="modal" id="targetModal" hidden>
+      <div class="modal__backdrop"></div>
+      <div
+        class="modal__card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="targetModalTitle"
+      >
+        <header class="modal__head">
+          <h3 class="modal__title" id="targetModalTitle">New target</h3>
+          <button class="iconbtn" id="targetModalClose" aria-label="Close">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            >
+              <path d="M3 3l8 8M11 3l-8 8" />
+            </svg>
+          </button>
+        </header>
+        <form class="form" id="targetForm">
+          <section class="form__section">
+            <h4 class="form__legend">Identity</h4>
+            <label class="form__field">
+              <span class="form__label">Target name</span>
+              <input
+                class="input"
+                name="name"
+                required
+                placeholder="intranet — main"
+              />
+            </label>
+            <label class="form__field">
+              <span class="form__label">Environment</span>
+              <select class="input" name="envTag">
+                <option value="dev">dev</option>
+                <option value="staging">staging</option>
+                <option value="prod">prod</option>
+              </select>
+            </label>
+          </section>
+
+          <section class="form__section">
+            <h4 class="form__legend">Connection</h4>
+            <div class="form__field">
+              <span class="form__label">Kind</span>
+              <div class="segmented" role="tablist">
+                <button
+                  type="button"
+                  class="segmented__btn segmented__btn--active"
+                  data-kind="docker-compose-vps"
+                >
+                  Docker Compose (VPS)
+                </button>
+                <button
+                  type="button"
+                  class="segmented__btn"
+                  data-kind="external-uri"
+                >
+                  External URI
+                </button>
+              </div>
+              <input type="hidden" name="kind" value="docker-compose-vps" />
+            </div>
+
+            <div data-show-when="docker-compose-vps">
+              <label class="form__field">
+                <span class="form__label">Server</span>
+                <select
+                  class="input"
+                  name="serverId"
+                  id="targetServerPicker"
+                ></select>
+                <span class="form__hint"
+                  >Add a server first via the sidebar's
+                  <strong>+ Server</strong> button.</span
+                >
+              </label>
+              <div class="form__field" id="composePickerStatus" hidden>
+                <span class="form__hint mono" id="composePickerStatusText"></span>
+              </div>
+
+              <div class="form__field" id="composeProjectPickerWrap" hidden>
+                <span class="form__label">Compose project</span>
+                <div class="form__input-row">
+                  <select class="input" id="composeProjectSelect"></select>
+                  <button type="button" class="btn btn--ghost btn--sm" id="composeRefresh" title="Refresh from server">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;vertical-align:-2px"><path d="M2 8a6 6 0 0110.5-4M14 8a6 6 0 01-10.5 4M14 3v3h-3M2 13v-3h3"/></svg>
+                    Refresh
+                  </button>
+                </div>
+                <span class="form__hint">Picked from <span class="mono" id="composePickerSource"></span> — the fields below auto-fill.</span>
+              </div>
+
+              <div class="form__field" id="composeServicePickerWrap" hidden>
+                <span class="form__label">Compose service (auto-detected)</span>
+                <select class="input" id="composeServiceSelect"></select>
+              </div>
+
+              <label class="form__field">
+                <span class="form__label">Compose project path</span>
+                <input
+                  class="input mono"
+                  name="vps_composeProjectPath"
+                  placeholder="/srv/app"
+                />
+                <span class="form__hint"
+                  >Directory on the VPS containing
+                  <span class="mono">docker-compose.yml</span>.</span
+                >
+              </label>
+              <div class="form__row">
+                <label class="form__field">
+                  <span class="form__label">Compose service name</span>
+                  <input
+                    class="input mono"
+                    name="vps_service"
+                    placeholder="db"
+                  />
+                </label>
+                <label class="form__field">
+                  <span class="form__label">Postgres user</span>
+                  <input
+                    class="input mono"
+                    name="vps_pgUser"
+                    placeholder="postgres"
+                  />
+                </label>
+              </div>
+              <label class="form__field">
+                <span class="form__label">Dump compression</span>
+                <select class="input" name="vps_compressionLevel">
+                  <option value="">Fast (default · -Z 1) — recommended</option>
+                  <option value="0">None (-Z 0) — fastest, largest dumps</option>
+                  <option value="3">Balanced (-Z 3)</option>
+                  <option value="6">High (-Z 6) — pg_dump's old default</option>
+                  <option value="9">Max (-Z 9) — slowest, smallest dumps</option>
+                </select>
+                <span class="form__hint">
+                  pg_dump compresses inside the container. Lower levels finish much faster on small VPSes; higher levels save bandwidth at the cost of CPU.
+                </span>
+              </label>
+              <div class="form__field" id="composeLoadFromServer" hidden>
+                <button type="button" class="btn btn--ghost btn--sm" id="composeLoadBtn">Load projects from server…</button>
+                <span class="form__hint">Requires entering the SSH passphrase. You can also fill the fields above manually.</span>
+              </div>
+            </div>
+
+            <div data-show-when="external-uri" hidden>
+              <div class="form__field">
+                <span class="form__label">Connection URI</span>
+                <input
+                  class="input mono"
+                  type="password"
+                  name="uri"
+                  placeholder="postgresql://user:pass@host:5432/db"
+                  autocomplete="off"
+                />
+                <span class="form__hint"
+                  >Stored encrypted via the OS keychain. Decrypted only at the
+                  moment a connection is opened.</span
+                >
+              </div>
+            </div>
+          </section>
+
+          <section class="form__section">
+            <h4 class="form__legend">Database</h4>
+            <div class="form__row">
+              <label class="form__field">
+                <span class="form__label">Engine</span>
+                <select class="input" name="engine">
+                  <option value="postgres">postgres</option>
+                  <option value="mongo" disabled>mongo (phase 2)</option>
+                </select>
+              </label>
+              <label class="form__field">
+                <span class="form__label">Database name</span>
+                <input
+                  class="input mono"
+                  name="dbName"
+                  required
+                  placeholder="appdb"
+                />
+              </label>
+            </div>
+          </section>
+
+          <footer class="modal__foot">
+            <p class="modal__error" id="targetFormError" hidden></p>
+            <div class="modal__foot-spacer"></div>
+            <button type="button" class="btn btn--ghost" id="targetFormCancel">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn btn--primary"
+              id="targetFormSubmit"
+            >
+              Save
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+
+    <!-- Discover modal -->
+    <div class="modal" id="discoverModal" hidden>
+      <div class="modal__backdrop"></div>
+      <div class="modal__card" role="dialog" aria-modal="true">
+        <header class="modal__head">
+          <h3 class="modal__title">
+            Discover databases —
+            <span class="mono" id="discoverServerName"></span>
+          </h3>
+          <button class="iconbtn" id="discoverModalClose" aria-label="Close">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            >
+              <path d="M3 3l8 8M11 3l-8 8" />
+            </svg>
+          </button>
+        </header>
+        <div class="discover-body" id="discoverBody">
+          <div class="discover__progress" id="discoverProgress">
+            <div class="op-panel__row">
+              <span class="op-panel__label" id="discoverPhase"
+                >Connecting…</span
+              >
+            </div>
+            <div class="op-panel__bar">
+              <div
+                class="op-panel__bar-inner"
+                id="discoverBar"
+                style="width: 15%"
+              ></div>
+            </div>
+            <pre class="op-panel__error mono" id="discoverError" hidden></pre>
+          </div>
+          <div class="discover__results" id="discoverResults" hidden></div>
+        </div>
+        <footer class="modal__foot">
+          <span class="form__hint" id="discoverSelectedCount"></span>
+          <div class="modal__foot-spacer"></div>
+          <button type="button" class="btn btn--ghost" id="discoverCancel">
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="btn btn--primary"
+            id="discoverConfirm"
+            disabled
+          >
+            Add selected
+          </button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Passphrase prompt modal -->
+    <div class="modal" id="passModal" hidden>
+      <div class="modal__backdrop"></div>
+      <div
+        class="modal__card modal__card--narrow"
+        role="dialog"
+        aria-modal="true"
+      >
+        <header class="modal__head">
+          <h3 class="modal__title">SSH key passphrase</h3>
+        </header>
+        <form class="form" id="passForm">
+          <p class="form__hint" id="passHint">
+            Enter the passphrase for the private key. It is held in memory only
+            and never written to disk.
+          </p>
+          <label class="form__field">
+            <input
+              class="input mono"
+              type="password"
+              name="passphrase"
+              autocomplete="off"
+              autofocus
+              placeholder="Leave empty if the key has no passphrase"
+            />
+            <span class="form__hint">
+              If your key was generated with <span class="mono">-N ""</span> (no passphrase), leave this field empty and click <strong>Unlock</strong>.
+            </span>
+          </label>
+          <footer class="modal__foot">
+            <button type="button" class="btn btn--ghost" id="passCancel">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn--primary">Unlock</button>
+          </footer>
+        </form>
+      </div>
+    </div>
+
+    <!-- Settings modal -->
+    <div class="modal" id="settingsModal" hidden>
+      <div class="modal__backdrop"></div>
+      <div class="modal__card modal__card--narrow" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+        <header class="modal__head">
+          <h3 class="modal__title" id="settingsModalTitle">Settings</h3>
+          <button class="iconbtn" id="settingsModalClose" aria-label="Close">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+          </button>
+        </header>
+        <div class="form">
+          <section class="form__section">
+            <h4 class="form__legend">Storage</h4>
+            <div class="form__field">
+              <span class="form__label">Dumps folder</span>
+              <div class="form__input-row">
+                <input class="input mono" id="settingsDumpsDir" readonly />
+                <button type="button" class="btn btn--ghost" id="settingsChangeDumpsDir">Change…</button>
+              </div>
+              <span class="form__hint">All encrypted dump files and their sidecars live here.</span>
+            </div>
+          </section>
+          <footer class="modal__foot">
+            <div class="modal__foot-spacer"></div>
+            <button type="button" class="btn btn--primary" id="settingsModalDone">Done</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Restore confirmation modal -->
+    <div class="modal" id="restoreModal" hidden>
+      <div class="modal__backdrop"></div>
+      <div class="modal__card modal__card--narrow" role="dialog" aria-modal="true" aria-labelledby="restoreModalTitle">
+        <header class="modal__head">
+          <h3 class="modal__title" id="restoreModalTitle">Restore dump</h3>
+          <button class="iconbtn" id="restoreModalClose" aria-label="Close">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+          </button>
+        </header>
+        <div class="form">
+          <p class="form__hint" id="restoreModalBody">…</p>
+          <label class="form__checkbox">
+            <input type="checkbox" id="restoreCleanFirst" />
+            <span>
+              <span class="form__checkbox-label">Clean target DB first (<span class="mono">--clean --if-exists</span>)</span>
+              <span class="form__hint">Drops existing objects before restoring. Required when the DB already has the schema.</span>
+            </span>
+          </label>
+          <footer class="modal__foot">
+            <p class="modal__error" id="restoreModalError" hidden></p>
+            <div class="modal__foot-spacer"></div>
+            <button type="button" class="btn btn--ghost" id="restoreModalCancel">Cancel</button>
+            <button type="button" class="btn btn--danger" id="restoreModalConfirm">Restore</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <script src="dev-mock.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,1541 @@
+'use strict';
+
+// Renderer entry. Owns the DOM only — every privileged action goes through
+// the narrow `window.dbm` bridge exposed by preload.
+
+const $ = (id) => document.getElementById(id);
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+})[c]);
+
+const state = {
+  servers: [],
+  targets: [],
+  selectedTargetId: null,
+  collapsedServers: new Set(),
+  connections: {}, // serverId -> boolean (connected)
+  composeProjectsByServer: {}, // serverId -> { projects:[...], composeBin, composeVersion }
+  dumps: [],
+  activity: [],
+  runtime: null,
+  logs: [],            // ring buffer of recent log entries
+  logsMax: 1000,
+  logFilter: 'all',    // 'all' | 'info' | 'warn' | 'error' | 'debug'
+  logSearch: '',
+  logsDrawerOpen: false,
+  logsAutoscroll: true,
+  logErrorCount: 0,
+  logsOpenIds: new Set(),
+  activeBackup: null, // { opId, targetId, serverId, startedAt, bytes, history, phase, estimate, tickInterval }
+};
+
+// ---------- bootstrap ----------
+
+(async function init() {
+  try {
+    state.runtime = await window.dbm.ping();
+    $('runtime').textContent =
+      'electron ' + state.runtime.runtime.electron +
+      ' · node ' + state.runtime.runtime.node +
+      ' · ' + state.runtime.runtime.platform;
+    if (!state.runtime.runtime.safeStorageAvailable) {
+      $('statusLeft').textContent = 'OS keychain unavailable — encryption disabled';
+    }
+  } catch (err) {
+    $('runtime').textContent = 'ipc error';
+    console.error(err);
+  }
+
+  window.dbm.backup.onProgress(onBackupProgress);
+  window.dbm.discovery.onProgress(onDiscoveryProgress);
+  window.dbm.logs.onEvent(onLogEvent);
+  installRendererErrorCapture();
+  initLogsDrawer();
+  // Seed the buffer with recent history so opening the drawer isn't empty.
+  try {
+    const tail = await window.dbm.logs.tail(200);
+    state.logs = tail;
+    state.logErrorCount = tail.filter((e) => e.level === 'error').length;
+    renderLogsBadge();
+  } catch { /* logs are nice-to-have, don't block boot */ }
+
+  // Sidebar
+  $('btnNewServer').addEventListener('click', () => openServerModal());
+  $('btnNewServerEmpty').addEventListener('click', () => openServerModal());
+  $('btnNewTarget').addEventListener('click', () => openTargetModal());
+
+  // Target view actions
+  $('btnEditTarget').addEventListener('click', () => {
+    const t = selectedTarget(); if (t) openTargetModal(t);
+  });
+  $('btnDeleteTarget').addEventListener('click', onDeleteTarget);
+  $('btnBackupNow').addEventListener('click', onBackupNow);
+  $('opCancelBtn').addEventListener('click', onCancelBackup);
+  $('opDismissBtn').addEventListener('click', dismissOpPanel);
+
+  // Server modal
+  $('serverModalClose').addEventListener('click', closeServerModal);
+  $('serverFormCancel').addEventListener('click', closeServerModal);
+  $('serverForm').addEventListener('submit', onServerSubmit);
+  $('btnPickKey').addEventListener('click', onPickKey);
+
+  // Target modal
+  $('targetModalClose').addEventListener('click', closeTargetModal);
+  $('targetFormCancel').addEventListener('click', closeTargetModal);
+  $('targetForm').addEventListener('submit', onTargetSubmit);
+  for (const btn of document.querySelectorAll('#targetForm .segmented__btn')) {
+    btn.addEventListener('click', () => selectKind(btn.dataset.kind));
+  }
+  $('targetServerPicker').addEventListener('change', () => refreshComposePickers());
+  $('composeProjectSelect').addEventListener('change', onComposeProjectChange);
+  $('composeServiceSelect').addEventListener('change', onComposeServiceChange);
+  $('composeRefresh').addEventListener('click', () => refreshComposePickers({ force: true }));
+  $('composeLoadBtn').addEventListener('click', () => refreshComposePickers({ force: true }));
+
+  // Discover modal
+  $('discoverModalClose').addEventListener('click', closeDiscoverModal);
+  $('discoverCancel').addEventListener('click', closeDiscoverModal);
+  $('discoverConfirm').addEventListener('click', onDiscoverConfirm);
+
+  // Passphrase
+  $('passCancel').addEventListener('click', () => closePassModal(null));
+  $('passForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = e.target.elements.passphrase.value;
+    closePassModal(v);
+  });
+
+  // Settings
+  $('btnSettings').addEventListener('click', openSettingsModal);
+  $('settingsModalClose').addEventListener('click', closeSettingsModal);
+  $('settingsModalDone').addEventListener('click', closeSettingsModal);
+  $('settingsChangeDumpsDir').addEventListener('click', onChangeDumpsDir);
+
+  // Restore modal
+  $('restoreModalClose').addEventListener('click', closeRestoreModal);
+  $('restoreModalCancel').addEventListener('click', closeRestoreModal);
+  $('restoreModalConfirm').addEventListener('click', onRestoreConfirm);
+
+  // Dump list — delegated click handler.
+  $('dumpList').addEventListener('click', onDumpListClick);
+
+  // Ensure the dump folder is picked before the first dumps:list.
+  try {
+    const { dumpsDir } = await window.dbm.settings.ensureDumpsDir();
+    state.dumpsDir = dumpsDir;
+  } catch (err) {
+    console.warn('ensureDumpsDir failed', err);
+  }
+
+  await refreshAll();
+})();
+
+// ---------- data ----------
+
+async function refreshAll() {
+  state.servers = await window.dbm.servers.list();
+  state.targets = await window.dbm.targets.list();
+  state.dumps = await window.dbm.dumps.list();
+  state.activity = await window.dbm.audit.tail(20);
+  state.connections = await window.dbm.connection.statusAll();
+  if (state.selectedTargetId && !state.targets.find((t) => t.id === state.selectedTargetId)) {
+    state.selectedTargetId = null;
+  }
+  if (!state.selectedTargetId && state.targets.length) state.selectedTargetId = state.targets[0].id;
+  renderAll();
+}
+
+function selectedTarget() {
+  return state.targets.find((t) => t.id === state.selectedTargetId) || null;
+}
+
+function selectedServer() {
+  const t = selectedTarget(); if (!t || !t.serverId) return null;
+  return state.servers.find((s) => s.id === t.serverId) || null;
+}
+
+function dumpsForSelected() {
+  const t = selectedTarget(); if (!t) return [];
+  // Sidecars use `sourceProfileId` for backward compat; that field now holds the Target id.
+  return state.dumps.filter((d) => d.sourceProfileId === t.id);
+}
+
+// ---------- render ----------
+
+function renderAll() {
+  renderServerTree();
+  renderMainPanel();
+  renderActivity();
+}
+
+function renderServerTree() {
+  const tree = $('serverTree');
+  const empty = $('serverEmpty');
+  if (state.servers.length === 0 && state.targets.length === 0) {
+    tree.innerHTML = ''; empty.hidden = false; return;
+  }
+  empty.hidden = true;
+
+  // Group: targets-by-server. Targets without a serverId go in a synthetic "Standalone" group.
+  const byServer = new Map();
+  for (const s of state.servers) byServer.set(s.id, []);
+  const standalone = [];
+  for (const t of state.targets) {
+    if (t.serverId && byServer.has(t.serverId)) byServer.get(t.serverId).push(t);
+    else standalone.push(t);
+  }
+
+  const parts = [];
+  for (const server of state.servers) {
+    const targets = byServer.get(server.id) || [];
+    const collapsed = state.collapsedServers.has(server.id);
+    const caret = collapsed ? '▸' : '▾';
+    const connected = !!state.connections[server.id];
+    const statusClass = connected ? ' tree__status--on' : '';
+    const connectBtn = connected
+      ? '<button class="iconbtn iconbtn--xs" data-action="disconnect" title="Disconnect">' +
+          '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>' +
+        '</button>'
+      : '<button class="iconbtn iconbtn--xs iconbtn--accent" data-action="connect" title="Connect">' +
+          '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10L4 12a2.5 2.5 0 003.5 3.5L10 13M10 6l2-2a2.5 2.5 0 00-3.5-3.5L6 3M6 10l4-4"/></svg>' +
+        '</button>';
+    parts.push(
+      '<div class="tree__server' + (collapsed ? ' tree__server--collapsed' : '') + '" data-server-id="' + server.id + '">' +
+        '<div class="tree__server-row" data-action="toggle">' +
+          '<span class="tree__caret">' + caret + '</span>' +
+          '<span class="tree__status' + statusClass + '" title="' + (connected ? 'Ready (passphrase cached) — no live SSH socket' : 'Not ready') + '"></span>' +
+          '<span class="tree__server-name">' + escapeHtml(server.name) + '</span>' +
+          '<span class="tree__server-meta mono">' + targets.length + '</span>' +
+          '<span class="tree__server-actions">' +
+            connectBtn +
+            '<button class="iconbtn iconbtn--xs" data-action="discover" title="Discover databases">' +
+              '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="5"/><path d="M14 14l-3.5-3.5"/></svg>' +
+            '</button>' +
+            '<button class="iconbtn iconbtn--xs" data-action="edit-server" title="Edit server">' +
+              '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2l3 3-8.5 8.5L2 14l.5-3.5L11 2z"/></svg>' +
+            '</button>' +
+            '<button class="iconbtn iconbtn--xs" data-action="delete-server" title="Delete server">' +
+              '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h10M6 4V2.5h4V4M5 4l.5 9h5L11 4"/></svg>' +
+            '</button>' +
+          '</span>' +
+        '</div>'
+    );
+    if (!collapsed) {
+      if (targets.length === 0) {
+        parts.push('<div class="tree__empty">No targets yet.</div>');
+      } else {
+        // Sort prod first, then staging, then dev.
+        const order = { prod: 0, staging: 1, dev: 2 };
+        targets.sort((a, b) => (order[a.envTag] - order[b.envTag]) || a.name.localeCompare(b.name));
+        for (const t of targets) parts.push(targetRow(t));
+      }
+    }
+    parts.push('</div>');
+  }
+
+  if (standalone.length) {
+    parts.push('<div class="tree__server"><div class="tree__server-row">' +
+      '<span class="tree__caret">▾</span><span class="tree__server-name">Standalone</span>' +
+      '<span class="tree__server-meta mono">' + standalone.length + '</span></div>');
+    for (const t of standalone) parts.push(targetRow(t));
+    parts.push('</div>');
+  }
+
+  tree.innerHTML = parts.join('');
+
+  // Wire interactions.
+  for (const row of tree.querySelectorAll('.tree__server-row')) {
+    row.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      const serverId = row.parentElement.dataset.serverId;
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === 'toggle') {
+        if (state.collapsedServers.has(serverId)) state.collapsedServers.delete(serverId);
+        else state.collapsedServers.add(serverId);
+        renderServerTree();
+      } else if (action === 'connect') {
+        e.stopPropagation();
+        connectServer(serverId);
+      } else if (action === 'disconnect') {
+        e.stopPropagation();
+        disconnectServer(serverId);
+      } else if (action === 'discover') {
+        e.stopPropagation();
+        startDiscovery(serverId);
+      } else if (action === 'edit-server') {
+        e.stopPropagation();
+        const server = state.servers.find((s) => s.id === serverId);
+        if (server) openServerModal(server);
+      } else if (action === 'delete-server') {
+        e.stopPropagation();
+        deleteServer(serverId);
+      }
+    });
+  }
+  for (const li of tree.querySelectorAll('.tree__target')) {
+    li.addEventListener('click', () => { state.selectedTargetId = li.dataset.id; renderAll(); });
+  }
+}
+
+function targetRow(t) {
+  const sel = t.id === state.selectedTargetId ? ' tree__target--selected' : '';
+  const dot = t.envTag === 'prod' ? '<span class="tree__dot tree__dot--prod" aria-hidden="true"></span>' : '<span class="tree__dot"></span>';
+  return (
+    '<div class="tree__target' + sel + '" data-id="' + t.id + '">' +
+      dot +
+      '<span class="tree__target-name">' + escapeHtml(t.name) + '</span>' +
+      '<span class="tree__target-tag tag tag--' + t.envTag + '">' + t.envTag + '</span>' +
+    '</div>'
+  );
+}
+
+function renderMainPanel() {
+  const t = selectedTarget();
+  if (!t) {
+    $('mainEmpty').hidden = false;
+    $('profileView').hidden = true;
+    $('appBarTitle').textContent = 'dbManager';
+    return;
+  }
+  $('mainEmpty').hidden = true;
+  $('profileView').hidden = false;
+  $('appBarTitle').textContent = 'dbManager — ' + t.name + ' [' + t.envTag + ']';
+
+  $('pvName').textContent = t.name;
+  const tag = $('pvTag');
+  tag.textContent = t.envTag;
+  tag.className = 'tag tag--' + t.envTag;
+
+  const server = selectedServer();
+  const kindLabel = t.kind === 'docker-compose-vps' && server
+    ? 'docker-compose · ' + server.user + '@' + server.host + ':' + server.port + ' · service: ' + (t.vps && t.vps.service)
+    : t.kind === 'docker-compose-vps' ? 'docker-compose (orphan: server missing)' : 'external-uri';
+  $('pvSub').textContent = t.engine + ' · ' + kindLabel + ' · db: ' + t.dbName;
+
+  const ds = dumpsForSelected();
+  $('dumpCount').textContent = String(ds.length);
+  const list = $('dumpList');
+  const empty = $('dumpEmpty');
+  if (ds.length === 0) { list.innerHTML = ''; empty.hidden = false; return; }
+  empty.hidden = true;
+  list.innerHTML = ds.map((d) => (
+    '<li class="dump-list__item" data-path="' + escapeHtml(d.path) + '">' +
+      '<span class="dump-list__name">' +
+        escapeHtml(d.sourceProfileName || t.name) +
+        '<span class="dump-list__db mono">· db: ' + escapeHtml(d.dbName || t.dbName) + '</span>' +
+      '</span>' +
+      '<span class="dump-list__when mono">' + formatTs(d.createdAt) + '</span>' +
+      '<span class="dump-list__size mono">' + formatBytes(d.byteSize) + '</span>' +
+      '<span class="dump-list__hash mono" title="' + escapeHtml(d.sha256Ciphertext) + '">' +
+        escapeHtml(d.sha256Ciphertext.slice(0, 12)) + '…' +
+      '</span>' +
+      '<span class="dump-list__actions">' +
+        '<button class="btn btn--ghost" data-action="restore">Restore…</button>' +
+        '<button class="btn btn--ghost" data-action="download">Download…</button>' +
+        '<button class="btn btn--danger" data-action="delete">Delete</button>' +
+      '</span>' +
+    '</li>'
+  )).join('');
+}
+
+function renderActivity() {
+  const ul = $('activityList');
+  const empty = $('activityEmpty');
+  if (state.activity.length === 0) { ul.innerHTML = ''; empty.hidden = false; return; }
+  empty.hidden = true;
+  ul.innerHTML = state.activity.map((a) => {
+    const icon = a.ok ? '<span class="activity-list__ok">✓</span>' : '<span class="activity-list__err">!</span>';
+    const subtitle = a.ok
+      ? (a.bytesOut ? formatBytes(a.bytesOut) : (a.projectCount != null ? a.projectCount + ' projects' : ''))
+      : escapeHtml(a.error || 'failed');
+    const name = a.profileName || a.serverName || '—';
+    return (
+      '<li class="activity-list__item">' +
+        '<div class="activity-list__row">' + icon +
+          '<span class="activity-list__op">' + escapeHtml(a.op) + '</span>' +
+          '<span class="activity-list__name">' + escapeHtml(name) + '</span>' +
+        '</div>' +
+        '<div class="activity-list__meta mono">' + formatTs(a.ts) + (subtitle ? ' · ' + subtitle : '') + '</div>' +
+      '</li>'
+    );
+  }).join('');
+}
+
+// ---------- server modal ----------
+
+let editingServerId = null;
+
+function openServerModal(existing) {
+  editingServerId = existing ? existing.id : null;
+  const form = $('serverForm');
+  form.reset();
+  $('serverFormError').hidden = true;
+  $('serverModalTitle').textContent = existing ? 'Edit server' : 'New server';
+  if (existing) {
+    form.elements.name.value = existing.name;
+    form.elements.host.value = existing.host;
+    form.elements.port.value = existing.port || 22;
+    form.elements.user.value = existing.user;
+    form.elements.privateKeyPath.value = existing.privateKeyPath;
+    form.elements.sudoForDocker.checked = !!existing.sudoForDocker;
+  } else {
+    form.elements.port.value = '22';
+  }
+  $('serverModal').hidden = false;
+  setTimeout(() => form.elements.name.focus(), 0);
+}
+
+function closeServerModal() { $('serverModal').hidden = true; editingServerId = null; }
+
+async function onServerSubmit(e) {
+  e.preventDefault();
+  const f = e.target.elements;
+  const input = {
+    name: f.name.value.trim(),
+    host: f.host.value.trim(),
+    port: Number(f.port.value) || 22,
+    user: f.user.value.trim(),
+    privateKeyPath: f.privateKeyPath.value.trim(),
+    sudoForDocker: f.sudoForDocker.checked,
+  };
+  try {
+    if (editingServerId) await window.dbm.servers.update(editingServerId, input);
+    else await window.dbm.servers.create(input);
+    closeServerModal();
+    await refreshAll();
+  } catch (err) {
+    const errEl = $('serverFormError');
+    errEl.textContent = err.message || String(err);
+    errEl.hidden = false;
+  }
+}
+
+// Make sure the server is connected (cache valid). Tries an empty passphrase
+// first so unencrypted keys never show the prompt. Returns true on success,
+// false if the user cancelled or auth failed irrecoverably.
+async function ensureConnected(serverId) {
+  if (state.connections[serverId]) return true;
+  const server = state.servers.find((s) => s.id === serverId);
+  if (!server) return false;
+
+  flashStatus('Connecting to ' + server.name + '…');
+  const silent = await window.dbm.connection.test(serverId, '');
+  if (silent.ok) {
+    state.connections[serverId] = true;
+    renderServerTree();
+    flashStatus('Ready to use ' + server.name + ' (passphrase cached)');
+    return true;
+  }
+
+  // ssh2 rejected the empty-passphrase attempt. Most likely the key is
+  // encrypted — prompt. (If the failure was a host-key TOFU rejection, the
+  // user already cancelled the native dialog; either way, ask for the
+  // passphrase as the next step.)
+  const entered = await askPassphrase(server.name);
+  if (entered === null) { flashStatus('Idle'); return false; }
+
+  flashStatus('Authenticating with ' + server.name + '…');
+  const res = await window.dbm.connection.test(serverId, entered);
+  if (res.ok) {
+    state.connections[serverId] = true;
+    renderServerTree();
+    flashStatus('Ready to use ' + server.name + ' (passphrase cached)');
+    return true;
+  }
+  state.connections[serverId] = false;
+  renderServerTree();
+  flashStatus('Connect failed: ' + (res.error || 'unknown'));
+  return false;
+}
+
+async function connectServer(id) { await ensureConnected(id); }
+
+async function disconnectServer(id) {
+  await window.dbm.connection.disconnect(id);
+  state.connections[id] = false;
+  renderServerTree();
+  const server = state.servers.find((s) => s.id === id);
+  flashStatus('Disconnected from ' + (server ? server.name : 'server'));
+}
+
+let statusFlashTimer = null;
+function flashStatus(msg) {
+  $('statusLeft').textContent = msg;
+  if (statusFlashTimer) clearTimeout(statusFlashTimer);
+  statusFlashTimer = setTimeout(() => { $('statusLeft').textContent = 'Idle'; }, 4000);
+}
+
+async function deleteServer(id) {
+  const server = state.servers.find((s) => s.id === id); if (!server) return;
+  const targets = state.targets.filter((t) => t.serverId === id);
+  const msg = targets.length
+    ? 'Delete server "' + server.name + '"?\n' + targets.length + ' target(s) on this server will also be removed. Existing dumps stay on disk.'
+    : 'Delete server "' + server.name + '"?';
+  if (!confirm(msg)) return;
+  await window.dbm.servers.remove(id, targets.length > 0);
+  await refreshAll();
+}
+
+async function onPickKey() {
+  try {
+    const picked = await window.dbm.dialog.pickKeyFile();
+    if (picked) $('serverForm').elements.privateKeyPath.value = picked;
+  } catch (err) {
+    const errEl = $('serverFormError');
+    errEl.textContent = 'Could not open file picker: ' + (err.message || String(err));
+    errEl.hidden = false;
+  }
+}
+
+// ---------- target modal ----------
+
+let editingTargetId = null;
+
+function openTargetModal(existing, defaults) {
+  editingTargetId = existing ? existing.id : null;
+  const form = $('targetForm');
+  form.reset();
+  $('targetFormError').hidden = true;
+  $('targetModalTitle').textContent = existing ? 'Edit target' : 'New target';
+
+  // Populate server picker.
+  const picker = $('targetServerPicker');
+  picker.innerHTML = state.servers.length
+    ? state.servers.map((s) => '<option value="' + s.id + '">' + escapeHtml(s.name) + ' (' + escapeHtml(s.host) + ')</option>').join('')
+    : '<option value="">No servers — add one first</option>';
+
+  if (existing) {
+    form.elements.name.value = existing.name;
+    form.elements.envTag.value = existing.envTag;
+    form.elements.engine.value = existing.engine;
+    form.elements.dbName.value = existing.dbName;
+    selectKind(existing.kind);
+    if (existing.kind === 'docker-compose-vps') {
+      if (existing.serverId) form.elements.serverId.value = existing.serverId;
+      form.elements.vps_composeProjectPath.value = (existing.vps && existing.vps.composeProjectPath) || '';
+      form.elements.vps_service.value = (existing.vps && existing.vps.service) || '';
+      form.elements.vps_pgUser.value = (existing.vps && existing.vps.pgUser) || '';
+      const cl = existing.vps && existing.vps.compressionLevel;
+      form.elements.vps_compressionLevel.value = cl == null ? '' : String(cl);
+    }
+  } else {
+    selectKind((defaults && defaults.kind) || 'docker-compose-vps');
+    if (defaults) {
+      if (defaults.serverId) form.elements.serverId.value = defaults.serverId;
+      if (defaults.envTag) form.elements.envTag.value = defaults.envTag;
+      if (defaults.name) form.elements.name.value = defaults.name;
+      if (defaults.dbName) form.elements.dbName.value = defaults.dbName;
+      if (defaults.composeProjectPath) form.elements.vps_composeProjectPath.value = defaults.composeProjectPath;
+      if (defaults.service) form.elements.vps_service.value = defaults.service;
+      if (defaults.pgUser) form.elements.vps_pgUser.value = defaults.pgUser;
+    }
+  }
+  $('targetModal').hidden = false;
+  setTimeout(() => form.elements.name.focus(), 0);
+  // Fire-and-forget: populate the project dropdown if we already have a
+  // cached SSH session for the selected server.
+  refreshComposePickers();
+}
+
+function closeTargetModal() {
+  $('targetModal').hidden = true;
+  editingTargetId = null;
+  hideComposePickers();
+}
+
+function selectKind(kind) {
+  $('targetForm').elements.kind.value = kind;
+  for (const btn of document.querySelectorAll('#targetForm .segmented__btn')) {
+    btn.classList.toggle('segmented__btn--active', btn.dataset.kind === kind);
+  }
+  for (const el of document.querySelectorAll('#targetForm [data-show-when]')) {
+    el.hidden = el.dataset.showWhen !== kind;
+  }
+}
+
+async function onTargetSubmit(e) {
+  e.preventDefault();
+  const f = e.target.elements;
+  const kind = f.kind.value;
+  const input = {
+    name: f.name.value.trim(),
+    envTag: f.envTag.value,
+    engine: f.engine.value,
+    kind,
+    dbName: f.dbName.value.trim(),
+  };
+  if (kind === 'docker-compose-vps') {
+    if (!f.serverId.value) {
+      const err = $('targetFormError');
+      err.textContent = 'Add a server first.';
+      err.hidden = false;
+      return;
+    }
+    input.serverId = f.serverId.value;
+    input.vps = {
+      composeProjectPath: f.vps_composeProjectPath.value.trim() || null,
+      service: f.vps_service.value.trim(),
+      pgUser: f.vps_pgUser.value.trim() || null,
+      compressionLevel: f.vps_compressionLevel.value === '' ? null : Number(f.vps_compressionLevel.value),
+    };
+  } else {
+    input.uri = f.uri.value;
+  }
+  try {
+    let rec;
+    if (editingTargetId) rec = await window.dbm.targets.update(editingTargetId, input);
+    else rec = await window.dbm.targets.create(input);
+    state.selectedTargetId = rec.id;
+    closeTargetModal();
+    await refreshAll();
+  } catch (err) {
+    const errEl = $('targetFormError');
+    errEl.textContent = err.message || String(err);
+    errEl.hidden = false;
+  }
+}
+
+// ---------- compose project / service pickers (Target modal) ----------
+
+function hideComposePickers() {
+  $('composeProjectPickerWrap').hidden = true;
+  $('composeServicePickerWrap').hidden = true;
+  $('composeLoadFromServer').hidden = true;
+  $('composePickerStatus').hidden = true;
+}
+
+function showComposeStatus(text) {
+  $('composePickerStatus').hidden = false;
+  $('composePickerStatusText').textContent = text;
+}
+
+async function refreshComposePickers(opts = {}) {
+  const form = $('targetForm');
+  const kind = form.elements.kind.value;
+  if (kind !== 'docker-compose-vps') return hideComposePickers();
+  const serverId = form.elements.serverId.value;
+  if (!serverId) return hideComposePickers();
+  const server = state.servers.find((s) => s.id === serverId);
+  if (!server) return hideComposePickers();
+
+  hideComposePickers();
+
+  // If not connected and the caller didn't force, just offer the "Load…" button.
+  if (!state.connections[serverId] && !opts.force) {
+    $('composeLoadFromServer').hidden = false;
+    return;
+  }
+
+  showComposeStatus('Listing compose projects on ' + server.name + '…');
+
+  const ok = await ensureConnected(serverId);
+  if (!ok) { hideComposePickers(); return; }
+
+  const res = await window.dbm.compose.listProjects(serverId, '');
+  if (!res.ok) {
+    hideComposePickers();
+    $('composeLoadFromServer').hidden = false;
+    showComposeStatus('Could not list projects: ' + res.error + '. Type the path manually below.');
+    return;
+  }
+
+  state.connections[serverId] = true;
+  state.composeProjectsByServer[serverId] = { projects: res.projects, composeBin: res.composeBin, composeVersion: res.composeVersion };
+
+  renderServerTree(); // refresh status dot
+
+  populateComposePickers(server, res.projects);
+}
+
+function populateComposePickers(server, projects) {
+  $('composePickerStatus').hidden = true;
+  $('composeLoadFromServer').hidden = true;
+
+  const select = $('composeProjectSelect');
+  const currentPath = $('targetForm').elements.vps_composeProjectPath.value;
+
+  // Build options. Tag each option with its project metadata via a JSON blob in
+  // a `data-` attribute; reading from the option keeps state local to the DOM.
+  const opts = [];
+  if (!projects.length) {
+    opts.push('<option value="" disabled selected>No running compose projects found</option>');
+  } else {
+    opts.push('<option value="">— pick a project —</option>');
+    let matchedExisting = false;
+    for (const p of projects) {
+      const isCurrent = p.path && p.path === currentPath;
+      if (isCurrent) matchedExisting = true;
+      opts.push(
+        '<option value="' + escapeHtml(p.name) + '"' +
+        ' data-path="' + escapeHtml(p.path || '') + '"' +
+        ' data-services="' + escapeHtml(JSON.stringify(p.services || [])) + '"' +
+        (isCurrent ? ' selected' : '') +
+        '>' + escapeHtml(p.name) + (p.path ? ' — ' + escapeHtml(p.path) : '') + '</option>'
+      );
+    }
+    // If the existing path doesn't match any listed project, add it as a
+    // "current value" option so the user doesn't lose it on save.
+    if (currentPath && !matchedExisting) {
+      opts.push('<option value="__current__" data-path="' + escapeHtml(currentPath) + '" selected>(current) ' + escapeHtml(currentPath) + '</option>');
+    }
+  }
+  select.innerHTML = opts.join('');
+
+  $('composeProjectPickerWrap').hidden = false;
+  $('composePickerSource').textContent = server.name;
+
+  // If a project is pre-selected, populate the service picker now.
+  if (select.selectedOptions[0] && select.selectedOptions[0].dataset.services) {
+    populateComposeServicePicker(select.selectedOptions[0]);
+  } else {
+    $('composeServicePickerWrap').hidden = true;
+  }
+}
+
+function onComposeProjectChange(e) {
+  const opt = e.target.selectedOptions[0];
+  if (!opt || !opt.value) return;
+  const path = opt.dataset.path || '';
+  $('targetForm').elements.vps_composeProjectPath.value = path;
+  populateComposeServicePicker(opt);
+}
+
+function populateComposeServicePicker(opt) {
+  let services = [];
+  try { services = JSON.parse(opt.dataset.services || '[]'); } catch { /* ignore */ }
+  const wrap = $('composeServicePickerWrap');
+  const select = $('composeServiceSelect');
+  if (!services.length) { wrap.hidden = true; return; }
+
+  const currentService = $('targetForm').elements.vps_service.value;
+  const opts = ['<option value="">— pick a service —</option>'];
+  let matched = false;
+  for (const s of services) {
+    const flag = s.isPostgres ? ' [postgres]' : s.isMongo ? ' [mongo]' : '';
+    const isCurrent = s.name === currentService;
+    if (isCurrent) matched = true;
+    opts.push(
+      '<option value="' + escapeHtml(s.name) + '"' + (isCurrent ? ' selected' : '') + '>' +
+        escapeHtml(s.name) + (s.image ? ' — ' + escapeHtml(s.image) : '') + flag +
+      '</option>'
+    );
+  }
+  if (currentService && !matched) {
+    opts.push('<option value="' + escapeHtml(currentService) + '" selected>(current) ' + escapeHtml(currentService) + '</option>');
+  }
+  select.innerHTML = opts.join('');
+  wrap.hidden = false;
+
+  // Auto-fill the service input if there's exactly one Postgres service and
+  // the user hasn't already chosen something.
+  if (!currentService) {
+    const pgServices = services.filter((s) => s.isPostgres);
+    if (pgServices.length === 1) {
+      select.value = pgServices[0].name;
+      $('targetForm').elements.vps_service.value = pgServices[0].name;
+    }
+  }
+}
+
+function onComposeServiceChange(e) {
+  $('targetForm').elements.vps_service.value = e.target.value;
+}
+
+// ---------- delete target ----------
+
+async function onDeleteTarget() {
+  const t = selectedTarget(); if (!t) return;
+  if (!confirm('Delete target "' + t.name + '"? Existing dumps stay on disk.')) return;
+  await window.dbm.targets.remove(t.id);
+  state.selectedTargetId = null;
+  await refreshAll();
+}
+
+// ---------- passphrase modal ----------
+
+let passResolver = null;
+function askPassphrase(label) {
+  $('passHint').textContent =
+    'Enter the SSH key passphrase for "' + label + '". It is held in memory only and never written to disk.';
+  $('passForm').reset();
+  $('passModal').hidden = false;
+  setTimeout(() => $('passForm').elements.passphrase.focus(), 0);
+  return new Promise((res) => { passResolver = res; });
+}
+function closePassModal(val) {
+  $('passModal').hidden = true;
+  const r = passResolver; passResolver = null;
+  if (r) r(val);
+}
+
+// ---------- backup ----------
+
+const PHASE_LABELS = {
+  queued:                'Queued — waiting for another backup on this server…',
+  opening:               'Starting backup…',
+  connecting:            'Opening SSH connection…',
+  'ssh-connecting':      'Opening SSH connection…',
+  'ssh:tcp-connecting':  'Reaching VPS (TCP)…',
+  'ssh:handshake':       'Negotiating SSH (handshake)…',
+  'ssh:host-key-check':  'Verifying host key…',
+  'ssh:authenticated':   'Authenticated — preparing pg_dump…',
+  authenticated:         'Authenticated — preparing pg_dump…',
+  'starting-dump':       'Running pg_dump inside container…',
+  waiting:               'Waiting for pg_dump to produce data…',
+  streaming:             'Streaming dump…',
+  stalled:               'Stalled — no data from pg_dump',
+  done:                  'Completed',
+  error:                 'Failed',
+  cancelled:             'Cancelled',
+};
+
+const CONNECT_PHASES = new Set([
+  'opening', 'connecting', 'ssh-connecting',
+  'ssh:tcp-connecting', 'ssh:handshake', 'ssh:host-key-check',
+]);
+
+async function onBackupNow() {
+  const t = selectedTarget(); if (!t) return;
+  if (t.kind !== 'docker-compose-vps') {
+    showOpError('External-URI backups are not yet wired up. Coming next.');
+    return;
+  }
+  const server = selectedServer();
+  if (!server) { showOpError('This target has no server attached. Edit the target to fix.'); return; }
+
+  // Skip the pre-flight connection.test entirely. backup:start surfaces
+  // NEED_PASSPHRASE if the cached/empty passphrase doesn't unlock the key, and
+  // we prompt + retry here. That collapses what used to be two SSH handshakes
+  // (test, then the real backup) into one in the happy path.
+  startOpPanel(t, server);
+  let res = await window.dbm.backup.start(t.id, '');
+  if (!res.ok && res.code === 'NEED_PASSPHRASE') {
+    const entered = await askPassphrase(server.name);
+    if (entered === null) {
+      finishOp(false, null, 'Cancelled by user', 'cancelled');
+      return;
+    }
+    // New op for the retry — clear the panel state so onBackupProgress accepts
+    // the next opId.
+    startOpPanel(t, server);
+    res = await window.dbm.backup.start(t.id, entered);
+    if (res.ok) state.connections[server.id] = true;
+  } else if (res.ok) {
+    state.connections[server.id] = true;
+  }
+
+  const b = state.activeBackup;
+  if (!res.ok && b && !b.userCancelled && b.phase !== 'error' && b.phase !== 'cancelled') {
+    showOpError(res.error);
+  }
+  renderServerTree();
+  await refreshAll();
+}
+
+function priorDumpEstimate(targetId) {
+  // Look at the largest prior dump for this target — most representative for the
+  // upper-bound. (Backups usually grow slowly.) Returns ciphertext byte size.
+  const matches = state.dumps.filter((d) => d.sourceProfileId === targetId && d.byteSize);
+  if (!matches.length) return null;
+  return matches.reduce((m, d) => Math.max(m, d.byteSize), 0);
+}
+
+function startOpPanel(target, server) {
+  // Tear down any previous op state.
+  if (state.activeBackup && state.activeBackup.tickInterval) {
+    clearInterval(state.activeBackup.tickInterval);
+  }
+  state.activeBackup = {
+    opId: null,
+    targetId: target.id,
+    serverId: server.id,
+    startedAt: Date.now(),
+    bytes: 0,
+    history: [],          // recent { t, b } samples for rate calc
+    phase: 'connecting',
+    estimate: priorDumpEstimate(target.id),
+    tickInterval: setInterval(tickOpPanel, 500),
+  };
+
+  $('opPanel').hidden = false;
+  $('opError').hidden = true;
+  $('opCancelBtn').hidden = false;
+  $('opDismissBtn').hidden = true;
+  setBarIndeterminate(true);
+  setBarClass(null);
+  applyPhase('connecting');
+  $('opBytes').textContent = '';
+  $('opRate').textContent = '';
+  $('opElapsed').textContent = '';
+  $('opEta').textContent = '';
+  $('opRateSep').hidden = true;
+  $('opElapsedSep').hidden = true;
+  $('opEtaSep').hidden = true;
+}
+
+function setBarIndeterminate(on) {
+  const el = $('opBar');
+  el.classList.toggle('op-panel__bar-inner--indeterminate', !!on);
+  if (on) el.style.width = '';
+}
+
+function setBarClass(kind) {
+  const el = $('opBar');
+  el.classList.toggle('op-panel__bar-inner--done', kind === 'done');
+  el.classList.toggle('op-panel__bar-inner--error', kind === 'error');
+}
+
+function applyPhase(phase) {
+  $('opPhase').textContent = PHASE_LABELS[phase] || phase;
+}
+
+function onBackupProgress(ev) {
+  if (!ev) return;
+  const b = state.activeBackup;
+  if (!b) return;
+  if (!b.opId) b.opId = ev.opId;
+  if (ev.opId !== b.opId) return;
+  if (b.userCancelled) return;
+
+  // Stall events change the label and bar style but don't end the operation.
+  if (ev.phase === 'stalled') {
+    b.stalled = true;
+    applyPhase('stalled');
+    $('opBar').classList.add('op-panel__bar-inner--stalled');
+    return;
+  }
+  if (ev.phase === 'resumed') {
+    b.stalled = false;
+    applyPhase('streaming');
+    $('opBar').classList.remove('op-panel__bar-inner--stalled');
+    return;
+  }
+
+  // Phase transitions that don't carry bytes.
+  if (ev.phase && ev.phase !== 'streaming') {
+    b.phase = ev.phase;
+    applyPhase(ev.phase);
+    if (ev.phase === 'done') return finishOp(true, ev.meta);
+    if (ev.phase === 'error') return finishOp(false, null, ev.error);
+    if (ev.phase === 'cancelled') return finishOp(false, null, 'Cancelled', 'cancelled');
+    return;
+  }
+
+  // Streaming.
+  b.phase = 'streaming';
+  applyPhase('streaming');
+  if (typeof ev.bytes === 'number') {
+    b.bytes = ev.bytes;
+    b.lastByteAt = Date.now();
+    b.history.push({ t: Date.now(), b: ev.bytes });
+    // Keep last 10 seconds of samples.
+    const cutoff = Date.now() - 10_000;
+    while (b.history.length > 1 && b.history[0].t < cutoff) b.history.shift();
+  }
+  if (b.estimate) {
+    const pct = Math.min(99, Math.round((b.bytes / b.estimate) * 100));
+    setBarIndeterminate(false);
+    $('opBar').style.width = pct + '%';
+  } else {
+    setBarIndeterminate(true);
+  }
+}
+
+function tickOpPanel() {
+  const b = state.activeBackup;
+  if (!b) return;
+  const elapsedMs = Date.now() - b.startedAt;
+  $('opElapsedSep').hidden = false;
+  $('opElapsed').textContent = formatDuration(elapsedMs);
+
+  // Heartbeat: while we're in a connect sub-phase, append "(still working…)"
+  // after 3s so the indeterminate bar isn't the only sign of life.
+  if (CONNECT_PHASES.has(b.phase) && elapsedMs > 3_000) {
+    const base = PHASE_LABELS[b.phase] || b.phase;
+    $('opPhase').textContent = base + ' (' + formatDuration(elapsedMs) + ' elapsed)';
+  }
+
+  if (b.bytes > 0) {
+    $('opBytes').textContent = formatBytes(b.bytes) + (b.estimate ? ' / ~' + formatBytes(b.estimate) : '');
+  } else {
+    $('opBytes').textContent = '';
+  }
+
+  // Rate over rolling window, but only if at least one sample is recent.
+  // Otherwise we'd display a stale "55 KB/s" from a long-finished burst.
+  const FRESH_MS = 5_000;
+  const lastSampleAge = b.lastByteAt ? Date.now() - b.lastByteAt : Infinity;
+  if (b.history.length >= 2 && lastSampleAge < FRESH_MS) {
+    const first = b.history[0], last = b.history[b.history.length - 1];
+    const dt = (last.t - first.t) / 1000;
+    if (dt > 0.25) {
+      const rate = (last.b - first.b) / dt;
+      $('opRateSep').hidden = false;
+      $('opRate').textContent = formatBytes(rate) + '/s';
+      if (b.estimate && b.bytes < b.estimate && rate > 0) {
+        const remaining = b.estimate - b.bytes;
+        const etaMs = (remaining / rate) * 1000;
+        $('opEtaSep').hidden = false;
+        $('opEta').textContent = 'ETA ' + formatDuration(etaMs);
+      }
+    }
+  } else {
+    // No recent sample — clear rate/ETA so they don't lie.
+    $('opRate').textContent = b.lastByteAt ? 'idle ' + formatDuration(lastSampleAge) : '';
+    $('opRateSep').hidden = !b.lastByteAt;
+    $('opEta').textContent = '';
+    $('opEtaSep').hidden = true;
+  }
+}
+
+function finishOp(ok, meta, error, mode) {
+  const b = state.activeBackup;
+  if (b && b.tickInterval) { clearInterval(b.tickInterval); b.tickInterval = null; }
+  $('opCancelBtn').hidden = true;
+  $('opDismissBtn').hidden = false;
+  setBarIndeterminate(false);
+  if (ok) {
+    setBarClass('done');
+    $('opBar').style.width = '100%';
+    applyPhase('done');
+    if (meta && typeof meta.byteSize === 'number') {
+      $('opBytes').textContent = formatBytes(meta.byteSize);
+    }
+  } else {
+    setBarClass('error');
+    $('opBar').style.width = '0';
+    applyPhase(mode === 'cancelled' ? 'cancelled' : 'error');
+    if (error) {
+      const el = $('opError');
+      el.textContent = error;
+      el.hidden = false;
+    }
+  }
+  if (b) b.phase = ok ? 'done' : (mode || 'error');
+}
+
+function dismissOpPanel() {
+  if (state.activeBackup && state.activeBackup.tickInterval) {
+    clearInterval(state.activeBackup.tickInterval);
+  }
+  state.activeBackup = null;
+  $('opPanel').hidden = true;
+}
+
+function onCancelBackup() {
+  const b = state.activeBackup; if (!b) return;
+  // Fire-and-forget: the backend will tear down at its own pace (kill the
+  // remote pg_dump, close the SSH channel, delete the partial file). We don't
+  // block the UI on that — the user clicked Cancel and should see the result
+  // immediately.
+  if (b.opId) { try { window.dbm.backup.cancel(b.opId); } catch {} }
+  b.userCancelled = true;
+  finishOp(false, null, 'Cancelled by user', 'cancelled');
+}
+
+function showOpError(msg) {
+  $('opPanel').hidden = false;
+  $('opError').hidden = false;
+  $('opError').textContent = msg || 'unknown error';
+  $('opCancelBtn').hidden = true;
+  $('opDismissBtn').hidden = false;
+  setBarClass('error');
+  setBarIndeterminate(false);
+  $('opBar').style.width = '0';
+  applyPhase('error');
+}
+
+function formatDuration(ms) {
+  if (!ms || ms < 0) return '0s';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60), rem = s % 60;
+  if (m < 60) return m + 'm ' + (rem ? rem + 's' : '00s');
+  const h = Math.floor(m / 60), rm = m % 60;
+  return h + 'h ' + rm + 'm';
+}
+
+// ---------- discovery ----------
+
+let activeDiscoveryServerId = null;
+let lastDiscoveryResult = null;
+
+async function startDiscovery(serverId) {
+  const server = state.servers.find((s) => s.id === serverId); if (!server) return;
+  activeDiscoveryServerId = serverId;
+  lastDiscoveryResult = null;
+
+  $('discoverServerName').textContent = server.name;
+  $('discoverProgress').hidden = false;
+  $('discoverResults').hidden = true;
+  $('discoverError').hidden = true;
+  $('discoverConfirm').disabled = true;
+  $('discoverSelectedCount').textContent = '';
+  $('discoverPhase').textContent = 'Connecting…';
+  $('discoverBar').style.width = '15%';
+  $('discoverModal').hidden = false;
+
+  const ok = await ensureConnected(serverId);
+  if (!ok) { closeDiscoverModal(); return; }
+
+  const res = await window.dbm.discovery.run(serverId, '');
+  if (!res.ok) {
+    const err = $('discoverError');
+    err.textContent = res.error || 'discovery failed';
+    err.hidden = false;
+    $('discoverPhase').textContent = 'Failed';
+    $('discoverBar').style.width = '0';
+    return;
+  }
+  lastDiscoveryResult = res.result;
+  // Discovery success implies a working connection.
+  state.connections[serverId] = true;
+
+  // Mark already-tracked DBs.
+  const existing = await window.dbm.targets.existingDbsForServer(serverId);
+  const existingKey = new Set(existing.map((e) =>
+    [e.composeProjectPath || '', e.projectName || '', e.service || '', e.dbName || ''].join('::')
+  ));
+  renderDiscoveryResults(res.result, existingKey);
+}
+
+function onDiscoveryProgress(ev) {
+  if (!ev) return;
+  const labels = {
+    connecting: 'Connecting…',
+    'probing-docker': 'Probing docker compose version…',
+    'listing-projects': 'Listing compose projects…',
+    'reading-project': 'Reading project: ' + (ev.message || ''),
+    'reading-databases': 'Listing databases: ' + (ev.message || ''),
+    done: 'Done',
+  };
+  $('discoverPhase').textContent = labels[ev.phase] || ev.phase;
+  if (ev.phase !== 'done') {
+    const cur = parseFloat($('discoverBar').style.width) || 15;
+    $('discoverBar').style.width = Math.min(95, cur + 8) + '%';
+  } else {
+    $('discoverBar').style.width = '100%';
+  }
+}
+
+function renderDiscoveryResults(result, existingKey) {
+  $('discoverProgress').hidden = true;
+  $('discoverResults').hidden = false;
+  const body = $('discoverResults');
+
+  if (!result.projects.length) {
+    body.innerHTML = '<div class="empty"><p class="empty__text">No running compose projects with a Postgres service found.</p></div>';
+    return;
+  }
+
+  const parts = [];
+  parts.push('<div class="discover__meta mono">' + escapeHtml(result.composeBin) + ' · ' + escapeHtml(result.composeVersion || 'v?') + '</div>');
+
+  for (const proj of result.projects) {
+    parts.push('<div class="discover__project">' +
+      '<div class="discover__project-head"><span class="discover__project-name">' + escapeHtml(proj.name) + '</span>' +
+        (proj.composeFile ? '<span class="discover__path mono">' + escapeHtml(proj.composeFile) + '</span>' : '') +
+      '</div>');
+    if (proj.error) {
+      parts.push('<div class="discover__error">' + escapeHtml(proj.error) + '</div>');
+    } else if (!proj.services || !proj.services.length) {
+      parts.push('<div class="discover__note">No Postgres service found.</div>');
+    } else {
+      for (const svc of proj.services) {
+        parts.push('<div class="discover__service">' +
+          '<div class="discover__service-head"><span class="mono">' + escapeHtml(svc.name) + '</span> · ' +
+            '<span class="discover__image mono">' + escapeHtml(svc.image || '') + '</span> · ' +
+            '<span class="discover__pguser mono">user: ' + escapeHtml(svc.pgUser) + '</span>' +
+          '</div>');
+        if (svc.error) {
+          parts.push('<div class="discover__error">' + escapeHtml(svc.error) + '</div>');
+        } else if (!svc.databases.length) {
+          parts.push('<div class="discover__note">No user databases.</div>');
+        } else {
+          for (const db of svc.databases) {
+            const key = [proj.composeProjectPath || '', proj.name || '', svc.name || '', db].join('::');
+            const already = existingKey.has(key);
+            parts.push(
+              '<label class="discover__db' + (already ? ' discover__db--existing' : '') + '">' +
+                '<input type="checkbox" ' + (already ? 'checked disabled ' : '') +
+                  'data-project="' + escapeHtml(proj.name) +
+                  '" data-path="' + escapeHtml(proj.composeProjectPath || '') +
+                  '" data-service="' + escapeHtml(svc.name) +
+                  '" data-pguser="' + escapeHtml(svc.pgUser) +
+                  '" data-db="' + escapeHtml(db) + '" />' +
+                '<span class="discover__db-name mono">' + escapeHtml(db) + '</span>' +
+                (already ? '<span class="discover__db-flag">already tracked</span>' : '') +
+              '</label>'
+            );
+          }
+        }
+        parts.push('</div>');
+      }
+    }
+    parts.push('</div>');
+  }
+
+  body.innerHTML = parts.join('');
+
+  for (const cb of body.querySelectorAll('input[type=checkbox]:not([disabled])')) {
+    cb.addEventListener('change', updateDiscoverSelectionCount);
+  }
+  updateDiscoverSelectionCount();
+}
+
+function updateDiscoverSelectionCount() {
+  const count = $('discoverResults').querySelectorAll('input[type=checkbox]:checked:not([disabled])').length;
+  $('discoverSelectedCount').textContent = count ? count + ' selected' : '';
+  $('discoverConfirm').disabled = count === 0;
+}
+
+async function onDiscoverConfirm() {
+  if (!activeDiscoveryServerId) return;
+  const inputs = [];
+  for (const cb of $('discoverResults').querySelectorAll('input[type=checkbox]:checked:not([disabled])')) {
+    inputs.push({
+      name: cb.dataset.project + ' — ' + cb.dataset.db,
+      envTag: 'prod', // sensible default; user can edit
+      engine: 'postgres',
+      kind: 'docker-compose-vps',
+      dbName: cb.dataset.db,
+      serverId: activeDiscoveryServerId,
+      vps: {
+        composeProjectPath: cb.dataset.path || null,
+        projectName: cb.dataset.project || null,
+        service: cb.dataset.service,
+        pgUser: cb.dataset.pguser || null,
+      },
+    });
+  }
+  if (!inputs.length) return;
+  try {
+    await window.dbm.targets.createMany(inputs);
+    closeDiscoverModal();
+    await refreshAll();
+  } catch (err) {
+    const errEl = $('discoverError');
+    errEl.textContent = err.message || String(err);
+    errEl.hidden = false;
+  }
+}
+
+function closeDiscoverModal() {
+  $('discoverModal').hidden = true;
+  activeDiscoveryServerId = null;
+  lastDiscoveryResult = null;
+}
+
+// ---------- logs drawer ----------
+
+const LEVEL_RANK = { debug: 0, info: 1, warn: 2, error: 3 };
+
+function initLogsDrawer() {
+  $('logsToggleBtn').addEventListener('click', toggleLogsDrawer);
+  $('logsCloseBtn').addEventListener('click', () => setLogsDrawer(false));
+  $('logsClearBtn').addEventListener('click', () => {
+    state.logs = []; state.logErrorCount = 0; state.logsOpenIds.clear();
+    renderLogs(); renderLogsBadge();
+  });
+  $('logsAutoscrollBtn').addEventListener('click', () => {
+    state.logsAutoscroll = !state.logsAutoscroll;
+    $('logsAutoscrollBtn').textContent = 'Autoscroll: ' + (state.logsAutoscroll ? 'on' : 'off');
+  });
+  $('logsSearch').addEventListener('input', (e) => {
+    state.logSearch = e.target.value.trim().toLowerCase();
+    renderLogs();
+  });
+  for (const chip of document.querySelectorAll('.logs-drawer__filters .chip')) {
+    chip.addEventListener('click', () => {
+      state.logFilter = chip.dataset.level;
+      for (const c of document.querySelectorAll('.logs-drawer__filters .chip')) {
+        c.classList.toggle('chip--active', c === chip);
+      }
+      renderLogs();
+    });
+  }
+  $('logsBody').addEventListener('click', (e) => {
+    const row = e.target.closest('.log-row');
+    if (!row) return;
+    const id = row.dataset.id;
+    if (state.logsOpenIds.has(id)) state.logsOpenIds.delete(id); else state.logsOpenIds.add(id);
+    renderLogs();
+  });
+}
+
+function toggleLogsDrawer() { setLogsDrawer(!state.logsDrawerOpen); }
+function setLogsDrawer(open) {
+  state.logsDrawerOpen = open;
+  $('logsDrawer').hidden = !open;
+  $('logsToggleBtn').classList.toggle('status-bar__btn--active', open);
+  if (open) renderLogs();
+}
+
+function onLogEvent(entry) {
+  if (!entry || !entry.id) return;
+  state.logs.push(entry);
+  if (state.logs.length > state.logsMax) state.logs = state.logs.slice(-state.logsMax);
+  if (entry.level === 'error') state.logErrorCount += 1;
+  renderLogsBadge();
+  if (state.logsDrawerOpen) appendLogRow(entry);
+}
+
+function renderLogsBadge() {
+  const total = state.logs.length;
+  $('logsBadge').textContent = state.logErrorCount > 0 ? state.logErrorCount + '!' : String(total);
+  $('logsBadge').classList.toggle('status-bar__badge--error', state.logErrorCount > 0);
+}
+
+function logRowHtml(e) {
+  const open = state.logsOpenIds.has(e.id);
+  const ts = formatLogTs(e.ts);
+  const compName = escapeHtml(e.component || 'app');
+  const detailsHtml = open && e.details
+    ? '<div class="log-row__details">' + escapeHtml(JSON.stringify(e.details, null, 2)) + '</div>'
+    : '';
+  return (
+    '<div class="log-row log-row--' + e.level + (open ? ' log-row--open' : '') + '" data-id="' + e.id + '">' +
+      '<span class="log-row__ts">' + ts + '</span>' +
+      '<span class="log-row__lvl log-row__lvl--' + e.level + '">' + e.level + '</span>' +
+      '<span class="log-row__comp">' + compName + '</span>' +
+      '<span class="log-row__msg">' + escapeHtml(e.message || '') + '</span>' +
+      detailsHtml +
+    '</div>'
+  );
+}
+
+function rowPasses(e) {
+  if (state.logFilter !== 'all') {
+    // Show selected level + anything more severe.
+    if (LEVEL_RANK[e.level] < LEVEL_RANK[state.logFilter]) return false;
+  }
+  if (state.logSearch) {
+    const hay = (e.message + ' ' + e.component + ' ' + (e.details ? JSON.stringify(e.details) : '')).toLowerCase();
+    if (!hay.includes(state.logSearch)) return false;
+  }
+  return true;
+}
+
+function renderLogs() {
+  const body = $('logsBody');
+  const visible = state.logs.filter(rowPasses);
+  $('logsCount').textContent = visible.length + (visible.length === state.logs.length ? '' : ' / ' + state.logs.length);
+  if (!visible.length) {
+    body.innerHTML = '<div class="log-empty">No log entries match.</div>';
+    return;
+  }
+  body.innerHTML = visible.map(logRowHtml).join('');
+  if (state.logsAutoscroll) body.scrollTop = body.scrollHeight;
+}
+
+function appendLogRow(entry) {
+  if (!rowPasses(entry)) return;
+  const body = $('logsBody');
+  if (body.querySelector('.log-empty')) body.innerHTML = '';
+  body.insertAdjacentHTML('beforeend', logRowHtml(entry));
+  if (state.logsAutoscroll) body.scrollTop = body.scrollHeight;
+  // Keep DOM bounded.
+  const rows = body.querySelectorAll('.log-row');
+  if (rows.length > state.logsMax) rows[0].remove();
+  const visibleCount = body.querySelectorAll('.log-row').length;
+  $('logsCount').textContent = visibleCount + (visibleCount === state.logs.length ? '' : ' / ' + state.logs.length);
+}
+
+function formatLogTs(iso) {
+  if (!iso) return '';
+  const d = new Date(iso); if (isNaN(d.getTime())) return iso;
+  const pad = (n) => String(n).padStart(2, '0');
+  return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+
+function installRendererErrorCapture() {
+  const send = (level, message, details) => {
+    // Always push locally so the drawer sees it immediately…
+    onLogEvent({
+      id: 'r-' + Date.now() + '-' + Math.random().toString(16).slice(2, 8),
+      ts: new Date().toISOString(),
+      level, component: 'renderer', message, details,
+    });
+    // …and forward to main so the file/log persists across reloads.
+    try { window.dbm.logs.append({ level, component: 'renderer', message, details }); } catch {}
+  };
+  window.addEventListener('error', (ev) => {
+    send('error', ev.message || 'window.onerror', {
+      filename: ev.filename, lineno: ev.lineno, colno: ev.colno,
+      stack: ev.error && ev.error.stack,
+    });
+  });
+  window.addEventListener('unhandledrejection', (ev) => {
+    const r = ev.reason || {};
+    send('error', 'Unhandled promise rejection: ' + (r.message || String(r)), {
+      stack: r.stack,
+    });
+  });
+}
+
+// ---------- formatting ----------
+
+function formatBytes(n) {
+  if (!n && n !== 0) return '';
+  if (n < 1024) return n + ' B';
+  const u = ['KB', 'MB', 'GB', 'TB']; let i = -1; let v = n;
+  do { v /= 1024; i++; } while (v >= 1024 && i < u.length - 1);
+  return v.toFixed(v >= 10 ? 0 : 1) + ' ' + u[i];
+}
+
+function formatTs(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const pad = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+    ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+// ---------- settings modal ----------
+
+async function openSettingsModal() {
+  try {
+    const res = await window.dbm.settings.get('dumpsDir');
+    $('settingsDumpsDir').value = (res && res.dumpsDir) || state.dumpsDir || '';
+  } catch { /* leave blank */ }
+  $('settingsModal').hidden = false;
+}
+
+function closeSettingsModal() { $('settingsModal').hidden = true; }
+
+async function onChangeDumpsDir() {
+  // Count current dumps so we can ask whether to migrate.
+  const existingCount = state.dumps.length;
+  const currentDir = $('settingsDumpsDir').value || '';
+
+  let doMigrate = false;
+  if (existingCount > 0) {
+    const ans = await window.dbm.dialog.confirm({
+      title: 'Move existing dumps?',
+      message: 'Move ' + existingCount + ' existing dump file' + (existingCount === 1 ? '' : 's') + ' to the new folder?',
+      detail: 'From: ' + currentDir + '\n\nChoose "Move" to migrate the files. Choose "Keep" to leave them at the old path (they will no longer appear in the list).',
+      confirmLabel: 'Move',
+      cancelLabel: 'Keep at old path',
+    });
+    doMigrate = ans.ok;
+  }
+
+  const res = await window.dbm.settings.pickDumpsDir({ migrate: doMigrate });
+  if (res.cancelled || !res.ok) return;
+  state.dumpsDir = res.dumpsDir;
+  $('settingsDumpsDir').value = res.dumpsDir;
+  if (res.migrated && res.migrated.errors && res.migrated.errors.length) {
+    flashStatus('Moved ' + res.migrated.moved.length + ' files, ' + res.migrated.errors.length + ' errors — see Logs');
+  } else if (res.migrated) {
+    flashStatus('Moved ' + res.migrated.moved.length + ' files to new folder');
+  } else {
+    flashStatus('Dumps folder set to ' + res.dumpsDir);
+  }
+  await refreshAll();
+}
+
+// ---------- dump list actions ----------
+
+async function onDumpListClick(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const li = btn.closest('li.dump-list__item');
+  if (!li) return;
+  const dumpPath = li.dataset.path;
+  const action = btn.dataset.action;
+  if (action === 'delete') return onDeleteDump(dumpPath);
+  if (action === 'download') return onDownloadDump(dumpPath);
+  if (action === 'restore') return openRestoreModal(dumpPath);
+}
+
+async function onDeleteDump(dumpPath) {
+  const fname = dumpPath.split(/[\\/]/).pop();
+  const ans = await window.dbm.dialog.confirm({
+    title: 'Delete dump',
+    message: 'Delete dump "' + fname + '"?',
+    detail: 'This removes the encrypted dump file and its sidecar. This cannot be undone.',
+    danger: true,
+    confirmLabel: 'Delete',
+    cancelLabel: 'Cancel',
+  });
+  if (!ans.ok) return;
+  const res = await window.dbm.dumps.remove(dumpPath);
+  if (!res.ok) flashStatus('Delete failed: ' + (res.error || 'unknown'));
+  else flashStatus('Deleted ' + fname);
+  await refreshAll();
+}
+
+async function onDownloadDump(dumpPath) {
+  const res = await window.dbm.dumps.download(dumpPath);
+  if (res.cancelled) return;
+  if (!res.ok) {
+    flashStatus('Download failed: ' + (res.error || 'unknown'));
+    return;
+  }
+  flashStatus('Saved decrypted dump to ' + res.outPath);
+}
+
+// ---------- restore modal ----------
+
+let pendingRestoreDumpPath = null;
+
+function openRestoreModal(dumpPath) {
+  pendingRestoreDumpPath = dumpPath;
+  const dump = state.dumps.find((d) => d.path === dumpPath);
+  const t = selectedTarget();
+  const server = selectedServer();
+  if (!dump || !t || !server) {
+    flashStatus('Cannot restore: missing dump/target/server context');
+    return;
+  }
+  const lines = [
+    'Source dump: ' + (dump.path.split(/[\\/]/).pop()),
+    'Taken: ' + formatTs(dump.createdAt) + ' · ' + formatBytes(dump.byteSize),
+    '',
+    'Target: ' + t.name + ' [' + t.envTag + ']',
+    'Server: ' + server.user + '@' + server.host + ':' + server.port,
+    'Database: ' + t.dbName + ' (service: ' + (t.vps && t.vps.service) + ')',
+  ];
+  $('restoreModalBody').textContent = lines.join('\n');
+  $('restoreCleanFirst').checked = false;
+  $('restoreModalError').hidden = true;
+  $('restoreModal').hidden = false;
+}
+
+function closeRestoreModal() {
+  $('restoreModal').hidden = true;
+  pendingRestoreDumpPath = null;
+}
+
+async function onRestoreConfirm() {
+  const dumpPath = pendingRestoreDumpPath;
+  if (!dumpPath) return;
+  const t = selectedTarget();
+  const server = selectedServer();
+  if (!t || !server) { closeRestoreModal(); return; }
+  const cleanFirst = $('restoreCleanFirst').checked;
+  closeRestoreModal();
+
+  startOpPanel(t, server);
+  let res = await window.dbm.restore.start(dumpPath, { targetId: t.id, cleanFirst, passphrase: '' });
+  if (!res.ok && res.code === 'NEED_PASSPHRASE') {
+    const entered = await askPassphrase(server.name);
+    if (entered === null) {
+      finishOp(false, null, 'Cancelled by user', 'cancelled');
+      return;
+    }
+    startOpPanel(t, server);
+    res = await window.dbm.restore.start(dumpPath, { targetId: t.id, cleanFirst, passphrase: entered });
+    if (res.ok) state.connections[server.id] = true;
+  } else if (res.ok) {
+    state.connections[server.id] = true;
+  }
+  const b = state.activeBackup;
+  if (!res.ok && b && !b.userCancelled && b.phase !== 'error' && b.phase !== 'cancelled') {
+    showOpError(res.error);
+  }
+  renderServerTree();
+  await refreshAll();
+}

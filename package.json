@@ -1,0 +1,19 @@
+{
+  "name": "dbmanager",
+  "version": "0.1.0",
+  "description": "Secure desktop tool for backing up and restoring Postgres / Mongo databases on docker-compose VPS or external URIs",
+  "main": "src/main/index.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "DBM_DEV=1 electron .",
+    "dev:web": "node scripts/dev-server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "dependencies": {
+    "ssh2": "^1.16.0"
+  }
+}

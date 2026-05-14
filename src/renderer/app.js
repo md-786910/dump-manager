@@ -59,6 +59,16 @@ const state = {
     renderLogsBadge();
   } catch { /* logs are nice-to-have, don't block boot */ }
 
+  // Privacy dialog (first-run only)
+  window.dbm.privacy.onShow(() => { $('privacyModal').hidden = false; });
+  $('privacyCheck').addEventListener('change', (e) => {
+    $('privacyAcceptBtn').disabled = !e.target.checked;
+  });
+  $('privacyAcceptBtn').addEventListener('click', async () => {
+    await window.dbm.privacy.accept();
+    $('privacyModal').hidden = true;
+  });
+
   // Sidebar
   $('btnNewServer').addEventListener('click', () => openServerModal());
   $('btnNewServerEmpty').addEventListener('click', () => openServerModal());

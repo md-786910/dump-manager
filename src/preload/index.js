@@ -19,12 +19,14 @@ const INVOKE_CHANNELS = new Set([
   'dialog:pickKeyFile', 'dialog:confirm', 'wsl:listDistros',
   'settings:get', 'settings:ensureDumpsDir', 'settings:pickDumpsDir',
   'db:listTables', 'db:queryTable', 'db:listDatabases', 'db:listCollections', 'db:queryCollection',
+  'privacy:accept',
 ]);
 
 const RECV_CHANNELS = new Set([
   'backup:progress',
   'discovery:progress',
   'log:event',
+  'show:privacy',
 ]);
 
 function invoke(channel, payload) {
@@ -116,5 +118,9 @@ contextBridge.exposeInMainWorld('dbm', {
     listCollections: (targetId, passphrase) => invoke('db:listCollections', { targetId, passphrase }),
     queryCollection: (targetId, collection, offset, passphrase) =>
       invoke('db:queryCollection', { targetId, collection, offset, passphrase }),
+  },
+  privacy: {
+    accept: () => invoke('privacy:accept'),
+    onShow: (listener) => on('show:privacy', listener),
   },
 });

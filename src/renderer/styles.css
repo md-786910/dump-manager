@@ -1077,3 +1077,85 @@ select.input:focus {
   color: var(--text);
 }
 .viewdb__doc-empty { color: var(--text-faint); font-size: var(--fs-secondary); padding: 20px 14px; }
+
+/* ── First-run privacy / welcome dialog ──────────────────────────────────── */
+.privacy-modal { z-index: 200; } /* sits above all other modals (z-index: 100) */
+.privacy-modal__backdrop { pointer-events: none; } /* cannot click through to dismiss */
+.privacy-modal__card {
+  width: 500px;
+  max-width: 94vw;
+}
+
+.privacy-hero {
+  text-align: center;
+  padding: 32px 28px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.privacy-hero__icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 14px;
+  display: block;
+}
+.privacy-hero__title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--text);
+}
+.privacy-hero__sub {
+  margin: 0;
+  font-size: var(--fs-secondary);
+  color: var(--text-muted);
+}
+
+.privacy-body {
+  padding: 22px 28px;
+}
+.privacy-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.privacy-list li {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  font-size: var(--fs-body);
+  color: var(--text);
+  line-height: 1.55;
+}
+.privacy-list__icon {
+  font-size: 17px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.privacy-list li strong { color: var(--text); font-weight: 600; }
+
+.privacy-footer {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 16px 22px;
+}
+.privacy-footer .form__checkbox {
+  gap: 10px;
+  font-size: var(--fs-body);
+}
+.privacy-footer .btn--primary {
+  width: 100%;
+  justify-content: center;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+.privacy-footer .btn--primary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}

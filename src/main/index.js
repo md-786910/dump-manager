@@ -11,6 +11,8 @@ const passphraseCache = require('./ssh/passphraseCache');
 const keychain = require('./crypto/keychain');
 const audit = require('./storage/audit');
 
+const settings = require('./storage/settings');
+
 const ipcServers = require('./ipc/servers');
 const ipcTargets = require('./ipc/targets');
 const ipcBackup = require('./ipc/backup');
@@ -44,6 +46,9 @@ function createMainWindow() {
   });
 
   win.once('ready-to-show', () => {
+    if (!settings.get(app, 'privacyAccepted')) {
+      win.webContents.send('show:privacy');
+    }
     win.show();
     if (autoOpenDevTools) win.webContents.openDevTools({ mode: 'detach' });
   });
@@ -105,6 +110,11 @@ app.whenReady().then(() => {
   }
 
   passphraseCache.attach(app);
+
+  ipcMain.handle('privacy:accept', () => {
+    settings.set(app, 'privacyAccepted', true);
+    return { ok: true };
+  });
 
   ipcMain.handle('app:ping', () => ({
     ok: true,

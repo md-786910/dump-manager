@@ -820,6 +820,51 @@
       </div>
     </div>
 
+    <!-- First-run privacy & welcome dialog (shown only once, non-dismissible) -->
+    <div class="modal privacy-modal" id="privacyModal" hidden>
+      <div class="modal__backdrop privacy-modal__backdrop"></div>
+      <div class="modal__card privacy-modal__card">
+
+        <div class="privacy-hero">
+          <div class="privacy-hero__icon" aria-hidden="true">🔒</div>
+          <h2 class="privacy-hero__title">Welcome to dbManager</h2>
+          <p class="privacy-hero__sub">Your data, your machine — before we begin.</p>
+        </div>
+
+        <div class="privacy-body">
+          <ul class="privacy-list">
+            <li>
+              <span class="privacy-list__icon" aria-hidden="true">🔐</span>
+              <span><strong>End-to-end encrypted</strong> — Every dump is AES-256-GCM encrypted on your disk. Only you hold the encryption key.</span>
+            </li>
+            <li>
+              <span class="privacy-list__icon" aria-hidden="true">🖥️</span>
+              <span><strong>Stored locally only</strong> — Backups live on your machine. Nothing is sent to any server, cloud service, or third party — ever.</span>
+            </li>
+            <li>
+              <span class="privacy-list__icon" aria-hidden="true">🔑</span>
+              <span><strong>Secure SSH communication</strong> — Remote servers are reached exclusively over SSH with private-key authentication. Passphrases are held in memory only and never written to disk.</span>
+            </li>
+            <li>
+              <span class="privacy-list__icon" aria-hidden="true">🚫</span>
+              <span><strong>Zero telemetry</strong> — No analytics, no crash reports, no auto-updates, no phone-home. The app has no network access except to your own servers.</span>
+            </li>
+          </ul>
+        </div>
+
+        <footer class="modal__foot privacy-footer">
+          <label class="form__checkbox" id="privacyCheckLabel">
+            <input type="checkbox" id="privacyCheck" />
+            <span>I understand this is a local-only tool and I accept the above.</span>
+          </label>
+          <button class="btn btn--primary" id="privacyAcceptBtn" disabled>
+            Get Started →
+          </button>
+        </footer>
+
+      </div>
+    </div>
+
     <script src="dev-mock.js"></script>
     <script src="app.js"></script>
   </body>

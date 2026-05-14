@@ -1,0 +1,15 @@
+---
+interface Props {
+  number: number;
+  title: string;
+  body: string;
+}
+const { number, title, body } = Astro.props;
+---
+<div class="relative card p-6">
+  <span class="absolute -top-3 left-6 px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-[var(--color-bg-2)] border border-[var(--color-border)] text-[var(--color-text-faint)]">
+    Step {number}
+  </span>
+  <h3 class="text-lg font-semibold mb-2 tracking-tight">{title}</h3>
+  <p class="text-sm text-[var(--color-text-muted)] leading-relaxed">{body}</p>
+</div>

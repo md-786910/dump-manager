@@ -20,7 +20,7 @@ function register({ servers, targets, knownHosts, passphraseCache }) {
     let ch;
     try {
       ch = await _openChannel(server, passphrase, passphraseCache, knownHosts);
-      const tables = await dbViewer.listTables(ch, target);
+      const tables = await dbViewer.listTables(ch, target, server);
       if (passphrase && server && server.kind === 'ssh') passphraseCache.set(server.id, passphrase);
       logging.debug('dbViewer', 'Listed ' + tables.length + ' table(s) for target ' + target.name);
       return { ok: true, tables };
@@ -44,7 +44,7 @@ function register({ servers, targets, knownHosts, passphraseCache }) {
     let ch;
     try {
       ch = await _openChannel(server, passphrase, passphraseCache, knownHosts);
-      const result = await dbViewer.queryTable(ch, target, { schema, table, offset: offset || 0 });
+      const result = await dbViewer.queryTable(ch, target, { schema, table, offset: offset || 0 }, server);
       if (passphrase && server && server.kind === 'ssh') passphraseCache.set(server.id, passphrase);
       return { ok: true, ...result };
     } catch (err) {
@@ -66,7 +66,7 @@ function register({ servers, targets, knownHosts, passphraseCache }) {
     let ch;
     try {
       ch = await _openChannel(server, passphrase, passphraseCache, knownHosts);
-      const collections = await dbViewer.listCollections(ch, target);
+      const collections = await dbViewer.listCollections(ch, target, server);
       if (passphrase && server && server.kind === 'ssh') passphraseCache.set(server.id, passphrase);
       logging.debug('dbViewer', 'Listed ' + collections.length + ' collection(s) for target ' + target.name);
       return { ok: true, collections };
@@ -89,7 +89,7 @@ function register({ servers, targets, knownHosts, passphraseCache }) {
     let ch;
     try {
       ch = await _openChannel(server, passphrase, passphraseCache, knownHosts);
-      const result = await dbViewer.queryCollection(ch, target, { collection, offset: offset || 0 });
+      const result = await dbViewer.queryCollection(ch, target, { collection, offset: offset || 0 }, server);
       if (passphrase && server && server.kind === 'ssh') passphraseCache.set(server.id, passphrase);
       return { ok: true, ...result };
     } catch (err) {
@@ -112,7 +112,7 @@ function register({ servers, targets, knownHosts, passphraseCache }) {
     let ch;
     try {
       ch = await _openChannel(server, passphrase, passphraseCache, knownHosts);
-      const databases = await dbViewer.listDatabases(ch, target);
+      const databases = await dbViewer.listDatabases(ch, target, server);
       if (passphrase && server && server.kind === 'ssh') passphraseCache.set(server.id, passphrase);
       logging.debug('dbViewer', 'Listed ' + databases.length + ' database(s) for target ' + target.name);
       return { ok: true, databases };

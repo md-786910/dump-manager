@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, safeStorage, shell } = require('electron');
 const path = require('node:path');
 
 const migrate = require('./storage/migrate');
@@ -10,6 +10,8 @@ const knownHostsStore = require('./ssh/knownHosts');
 const passphraseCache = require('./ssh/passphraseCache');
 const keychain = require('./crypto/keychain');
 const audit = require('./storage/audit');
+
+const settings = require('./storage/settings');
 
 const ipcServers = require('./ipc/servers');
 const ipcTargets = require('./ipc/targets');
@@ -22,7 +24,7 @@ const ipcDbViewer = require('./ipc/dbViewer');
 const logging = require('./logging');
 
 const isDev = !app.isPackaged;
-const autoOpenDevTools = process.env.DBM_DEV === '1';
+const autoOpenDevTools = process.env.TUNNEX_DEV === '1' || process.env.DBM_DEV === '1';
 
 function createMainWindow() {
   const win = new BrowserWindow({
@@ -44,6 +46,9 @@ function createMainWindow() {
   });
 
   win.once('ready-to-show', () => {
+    if (!settings.get(app, 'privacyAccepted')) {
+      win.webContents.send('show:privacy');
+    }
     win.show();
     if (autoOpenDevTools) win.webContents.openDevTools({ mode: 'detach' });
   });
@@ -68,10 +73,14 @@ app.on('web-contents-created', (_event, contents) => {
 });
 
 app.whenReady().then(() => {
+  // Drop the default OS menu (File / Edit / View / Help). The app is fully
+  // driven from the in-window UI; the native menu only adds visual noise.
+  Menu.setApplicationMenu(null);
+
   // 0. Initialize logging before anything else so the migration step itself
   //    can emit log entries.
   logging.init(app);
-  logging.info('app', 'dbManager started', {
+  logging.info('app', 'Tunnex started', {
     electron: process.versions.electron, node: process.versions.node, platform: process.platform,
   });
 
@@ -106,12 +115,19 @@ app.whenReady().then(() => {
 
   passphraseCache.attach(app);
 
+  ipcMain.handle('privacy:accept', () => {
+    settings.set(app, 'privacyAccepted', true);
+    return { ok: true };
+  });
+
   ipcMain.handle('app:ping', () => ({
     ok: true,
     runtime: {
+      version: app.getVersion(),
       electron: process.versions.electron,
       node: process.versions.node,
       platform: process.platform,
+      packaged: app.isPackaged,
       safeStorageAvailable: safeStorage.isEncryptionAvailable(),
     },
   }));
@@ -125,7 +141,18 @@ app.whenReady().then(() => {
   ipcLogs.register();
   ipcDbViewer.register({ servers, targets, knownHosts, passphraseCache });
 
-  createMainWindow();
+  const mainWin = createMainWindow();
+
+  // Auto-update is only meaningful for packaged builds — the dev tree has no
+  // installed binary to swap out. Skipping silently in dev avoids noisy logs.
+  if (app.isPackaged) {
+    try {
+      require('./updater').attach(mainWin);
+    } catch (err) {
+      logging.warn('updater', 'failed to attach: ' + err.message);
+    }
+  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });

@@ -34,11 +34,13 @@ const state = {
 (async function init() {
   try {
     state.runtime = await window.dbm.ping();
+    const rt = state.runtime.runtime;
+    if (rt.version) $('appVersion').textContent = 'v' + rt.version;
     $('runtime').textContent =
-      'electron ' + state.runtime.runtime.electron +
-      ' · node ' + state.runtime.runtime.node +
-      ' · ' + state.runtime.runtime.platform;
-    if (!state.runtime.runtime.safeStorageAvailable) {
+      'electron ' + rt.electron +
+      ' · node ' + rt.node +
+      ' · ' + rt.platform;
+    if (!rt.safeStorageAvailable) {
       $('statusLeft').textContent = 'OS keychain unavailable — encryption disabled';
     }
   } catch (err) {
@@ -49,6 +51,7 @@ const state = {
   window.dbm.backup.onProgress(onBackupProgress);
   window.dbm.discovery.onProgress(onDiscoveryProgress);
   window.dbm.logs.onEvent(onLogEvent);
+  initUpdater();
   installRendererErrorCapture();
   initLogsDrawer();
   // Seed the buffer with recent history so opening the drawer isn't empty.
@@ -58,6 +61,16 @@ const state = {
     state.logErrorCount = tail.filter((e) => e.level === 'error').length;
     renderLogsBadge();
   } catch { /* logs are nice-to-have, don't block boot */ }
+
+  // Privacy dialog (first-run only)
+  window.dbm.privacy.onShow(() => { $('privacyModal').hidden = false; });
+  $('privacyCheck').addEventListener('change', (e) => {
+    $('privacyAcceptBtn').disabled = !e.target.checked;
+  });
+  $('privacyAcceptBtn').addEventListener('click', async () => {
+    await window.dbm.privacy.accept();
+    $('privacyModal').hidden = true;
+  });
 
   // Sidebar
   $('btnNewServer').addEventListener('click', () => openServerModal());
@@ -92,7 +105,7 @@ const state = {
   for (const btn of document.querySelectorAll('#targetForm .segmented__btn')) {
     btn.addEventListener('click', () => selectKind(btn.dataset.kind));
   }
-  $('targetServerPicker').addEventListener('change', () => refreshComposePickers());
+  $('targetServerPicker').addEventListener('change', onTargetServerChange);
   document.querySelector('#targetForm select[name="engine"]').addEventListener('change', (e) => selectEngine(e.target.value));
   // Installed kind: engine change also updates default port
   $('installedServerPicker').addEventListener('change', () => {});
@@ -196,8 +209,15 @@ function renderServerTree() {
     else standalone.push(t);
   }
 
+  // Split servers into VPS (ssh) and LOCAL groups. Render VPS first.
+  const vpsServers = state.servers.filter((s) => s.kind !== 'local');
+  const localServers = state.servers.filter((s) => s.kind === 'local');
+  const groups = [];
+  if (vpsServers.length) groups.push({ label: 'VPS', servers: vpsServers });
+  if (localServers.length) groups.push({ label: 'LOCAL', servers: localServers });
+
   const parts = [];
-  for (const server of state.servers) {
+  const renderServer = (server) => {
     const targets = byServer.get(server.id) || [];
     const collapsed = state.collapsedServers.has(server.id);
     const caret = collapsed ? '▸' : '▾';
@@ -271,6 +291,11 @@ function renderServerTree() {
       }
     }
     parts.push('</div>');
+  };
+
+  for (const group of groups) {
+    parts.push('<div class="tree__section">' + group.label + '</div>');
+    for (const server of group.servers) renderServer(server);
   }
 
   if (standalone.length) {
@@ -338,12 +363,12 @@ function renderMainPanel() {
   if (!t) {
     $('mainEmpty').hidden = false;
     $('profileView').hidden = true;
-    $('appBarTitle').textContent = 'dbManager';
+    $('appBarTitle').textContent = 'Tunnex';
     return;
   }
   $('mainEmpty').hidden = true;
   $('profileView').hidden = false;
-  $('appBarTitle').textContent = 'dbManager — ' + t.name + ' [' + t.envTag + ']';
+  $('appBarTitle').textContent = 'Tunnex — ' + t.name + ' [' + t.envTag + ']';
 
   $('pvName').textContent = t.name;
   const tag = $('pvTag');
@@ -461,6 +486,20 @@ function serverPickerSubtitle(s) {
     return s.wslDistro ? 'local · WSL: ' + s.wslDistro : 'local';
   }
   return s.host || 'ssh';
+}
+
+function buildServerOptionsHtml(servers, { includeNoneOption = false } = {}) {
+  const locals = servers.filter((s) => s.kind === 'local');
+  const sshs = servers.filter((s) => s.kind === 'ssh');
+  const opt = (s) =>
+    '<option value="' + s.id + '">' +
+      escapeHtml(s.name) + ' (' + escapeHtml(serverPickerSubtitle(s)) + ')' +
+    '</option>';
+  const parts = [];
+  if (includeNoneOption) parts.push('<option value="">(this machine)</option>');
+  if (locals.length) parts.push('<optgroup label="LOCAL">' + locals.map(opt).join('') + '</optgroup>');
+  if (sshs.length) parts.push('<optgroup label="VPS">' + sshs.map(opt).join('') + '</optgroup>');
+  return parts.join('');
 }
 
 async function populateWslDistros() {
@@ -583,6 +622,7 @@ async function ensureConnected(serverId) {
   state.connections[serverId] = false;
   renderServerTree();
   flashStatus('Connect failed: ' + (res.error || 'unknown'));
+  await showDockerSetupHelp(res.code, res.error);
   return false;
 }
 
@@ -601,6 +641,7 @@ async function probeLocalServer(id) {
     state.connections[id] = false;
     renderServerTree();
     flashStatus('Probe failed: ' + (res.error || 'unknown'));
+    await showDockerSetupHelp(res.code, res.error);
   }
 }
 
@@ -617,6 +658,45 @@ function flashStatus(msg) {
   $('statusLeft').textContent = msg;
   if (statusFlashTimer) clearTimeout(statusFlashTimer);
   statusFlashTimer = setTimeout(() => { $('statusLeft').textContent = 'Idle'; }, 4000);
+}
+
+// Returns true if the error was recognized and a dialog was shown.
+// A packaged Electron app cannot prompt the user for a sudo password (no TTY,
+// and showing a per-command GUI prompt is poor UX). Instead, surface a clear
+// dialog with the one-time fix command for users to run in a terminal.
+async function showDockerSetupHelp(code, fallbackMessage) {
+  const fixCmd = 'sudo usermod -aG docker $USER';
+  const details = {
+    DOCKER_UNAVAILABLE: {
+      title: 'Docker is not accessible',
+      message: 'This app needs access to Docker without a password prompt.',
+      detail:
+        'Either Docker is not installed/running, or your user is not in the docker group.\n\n' +
+        'Fix (one-time):\n  ' + fixCmd + '\n\nThen log out and back in (or reboot) and try again.',
+    },
+    DOCKER_SUDO_PASSWORD_REQUIRED: {
+      title: 'Docker requires a password',
+      message: 'Docker is only reachable via sudo, but a GUI app cannot prompt for the password.',
+      detail:
+        'Recommended fix (one-time): add your user to the docker group so sudo is no longer needed.\n\n' +
+        '  ' + fixCmd + '\n\nThen log out and back in (or reboot).\n\n' +
+        'Alternative: configure passwordless sudo (NOPASSWD) for docker in /etc/sudoers.',
+    },
+  };
+  const info = details[code];
+  if (!info) return false;
+  const ans = await window.dbm.dialog.confirm({
+    title: info.title,
+    message: info.message,
+    detail: info.detail + (fallbackMessage ? '\n\n(' + fallbackMessage + ')' : ''),
+    confirmLabel: 'Copy fix command',
+    cancelLabel: 'Close',
+  });
+  if (ans.ok) {
+    try { await navigator.clipboard.writeText(fixCmd); flashStatus('Fix command copied to clipboard'); }
+    catch { flashStatus('Could not copy — run: ' + fixCmd); }
+  }
+  return true;
 }
 
 async function deleteServer(id) {
@@ -655,12 +735,11 @@ function openTargetModal(existing, defaults) {
   // Populate server pickers (docker-compose and installed share the same server list).
   const picker = $('targetServerPicker');
   picker.innerHTML = state.servers.length
-    ? state.servers.map((s) => '<option value="' + s.id + '">' + escapeHtml(s.name) + ' (' + escapeHtml(serverPickerSubtitle(s)) + ')</option>').join('')
+    ? buildServerOptionsHtml(state.servers)
     : '<option value="">No servers — add one first</option>';
 
   const instPicker = $('installedServerPicker');
-  instPicker.innerHTML = '<option value="">(this machine)</option>' +
-    state.servers.map((s) => '<option value="' + s.id + '">' + escapeHtml(s.name) + ' (' + escapeHtml(serverPickerSubtitle(s)) + ')</option>').join('');
+  instPicker.innerHTML = buildServerOptionsHtml(state.servers, { includeNoneOption: true });
 
   if (existing) {
     form.elements.name.value = existing.name;
@@ -704,8 +783,10 @@ function openTargetModal(existing, defaults) {
   $('targetModal').hidden = false;
   setTimeout(() => form.elements.name.focus(), 0);
   // Fire-and-forget: populate the project dropdown if we already have a
-  // cached SSH session for the selected server.
-  refreshComposePickers();
+  // cached SSH session for the selected server. Programmatic .value
+  // assignment above doesn't fire 'change' — dispatch it so the same path
+  // runs whether the server was set programmatically or by the user.
+  $('targetServerPicker').dispatchEvent(new Event('change'));
 }
 
 function closeTargetModal() {
@@ -811,6 +892,25 @@ function hideComposePickers() {
 function showComposeStatus(text) {
   $('composePickerStatus').hidden = false;
   $('composePickerStatusText').textContent = text;
+}
+
+function onTargetServerChange() {
+  // If the user picked a server different from the one originally saved on
+  // the target being edited, the previously-saved compose project path and
+  // service belong to the old server and would show up as a misleading
+  // "(current)" option. Clear them so the new server's project list drives
+  // the selection.
+  const form = $('targetForm');
+  const newServerId = form.elements.serverId.value;
+  const original = editingTargetId
+    ? state.targets.find((t) => t.id === editingTargetId)
+    : null;
+  const originalServerId = original ? original.serverId : null;
+  if (editingTargetId && newServerId !== originalServerId) {
+    form.elements.vps_composeProjectPath.value = '';
+    form.elements.vps_service.value = '';
+  }
+  refreshComposePickers();
 }
 
 async function refreshComposePickers(opts = {}) {
@@ -1340,7 +1440,11 @@ function onBackupProgress(ev) {
     b.phase = ev.phase;
     applyPhase(ev.phase);
     if (ev.phase === 'done') return finishOp(true, ev.meta);
-    if (ev.phase === 'error') return finishOp(false, null, ev.error);
+    if (ev.phase === 'error') {
+      finishOp(false, null, ev.error);
+      showDockerSetupHelp(ev.code, ev.error);
+      return;
+    }
     if (ev.phase === 'cancelled') return finishOp(false, null, 'Cancelled', 'cancelled');
     return;
   }
@@ -1517,6 +1621,7 @@ async function startDiscovery(serverId) {
     err.hidden = false;
     $('discoverPhase').textContent = 'Failed';
     $('discoverBar').style.width = '0';
+    await showDockerSetupHelp(res.code, res.error);
     return;
   }
   lastDiscoveryResult = res.result;
@@ -2068,4 +2173,54 @@ async function onRestoreConfirm() {
   }
   renderServerTree();
   await refreshAll();
+}
+
+// ---------- auto-update banner ----------
+
+function initUpdater() {
+  if (!window.dbm || !window.dbm.updates) return;
+  const banner = $('updateBanner');
+  const text = $('updateBannerText');
+  const bar = $('updateBannerBar');
+  const barInner = $('updateBannerBarInner');
+  const actions = $('updateBannerActions');
+  if (!banner) return;
+
+  function showDownloading(payload) {
+    banner.hidden = false;
+    banner.classList.remove('update-banner--error');
+    const pct = payload && typeof payload.percent === 'number' ? Math.round(payload.percent) : 0;
+    text.textContent = 'Downloading update… ' + pct + '%';
+    bar.hidden = false;
+    barInner.style.width = pct + '%';
+    actions.hidden = true;
+  }
+  function showReady(version) {
+    banner.hidden = false;
+    banner.classList.remove('update-banner--error');
+    text.textContent = 'Update ' + (version ? 'v' + version + ' ' : '') + 'ready to install.';
+    bar.hidden = true;
+    actions.hidden = false;
+  }
+  function showError(message) {
+    banner.hidden = false;
+    banner.classList.add('update-banner--error');
+    text.textContent = 'Update failed: ' + message;
+    bar.hidden = true;
+    actions.hidden = true;
+    setTimeout(() => {
+      if (banner.classList.contains('update-banner--error')) banner.hidden = true;
+    }, 10000);
+  }
+  function hide() { banner.hidden = true; }
+
+  window.dbm.updates.on('checking', () => { /* silent */ });
+  window.dbm.updates.on('available', (payload) => showDownloading({ percent: 0, ...(payload || {}) }));
+  window.dbm.updates.on('progress', showDownloading);
+  window.dbm.updates.on('ready', (payload) => showReady(payload && payload.version));
+  window.dbm.updates.on('none', () => { /* nothing to do */ });
+  window.dbm.updates.on('error', (payload) => showError(payload && payload.message || 'unknown error'));
+
+  $('updateRestartBtn').addEventListener('click', () => { window.dbm.updates.installNow(); });
+  $('updateDismissBtn').addEventListener('click', hide);
 }

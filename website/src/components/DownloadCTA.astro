@@ -1,0 +1,114 @@
+---
+// One unified component that does double duty: a big "Download for <your OS>"
+// primary CTA and a "Other platforms" expandable tray. Used on the hero and
+// recycled at the bottom of the home page.
+//
+// OS detection happens via the `<html data-os="...">` attribute set by the
+// inline script in Base.astro. We render all four buttons up-front and use
+// pure CSS to surface the matching one based on that attribute — zero
+// hydration / framework runtime needed.
+import { getReleaseInfo, formatBytes, platformLabel, kindLabel } from '../lib/releases';
+
+interface Props {
+  compact?: boolean;
+}
+const { compact = false } = Astro.props;
+const release = await getReleaseInfo();
+
+const order = [
+  { os: 'mac',     kinds: ['dmg'] },
+  { os: 'windows', kinds: ['exe'] },
+  { os: 'linux',   kinds: ['appimage', 'deb'] },
+];
+
+function pickFile(os: string, kind: string) {
+  return release.files.find((f) => f.platform === os && f.kind === kind);
+}
+
+const primaryByOs: Record<string, ReturnType<typeof pickFile>> = {
+  mac:     pickFile('mac', 'dmg'),
+  windows: pickFile('windows', 'exe'),
+  linux:   pickFile('linux', 'appimage'),
+};
+---
+<div class:list={['flex flex-col items-start gap-3', compact && 'items-center']}>
+  <!-- Primary CTAs — only the matching one is shown via [data-os] selectors. -->
+  <div class="relative">
+    {(['mac', 'windows', 'linux'] as const).map((os) => {
+      const file = primaryByOs[os];
+      const disabled = !file;
+      return (
+        <a
+          href={file?.url || '/download'}
+          data-os-cta={os}
+          class:list={[
+            'group hidden items-center gap-3 px-5 py-3 rounded-lg font-semibold text-base',
+            'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)]/90 transition-colors',
+            disabled && 'opacity-60 pointer-events-none',
+            compact && 'text-sm py-2.5 px-4',
+          ]}
+        >
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 1v10M4 7l4 4 4-4M2 14h12"/>
+          </svg>
+          <span>Download for {platformLabel(os)}</span>
+          {file && (
+            <span class="text-xs font-normal opacity-80 hidden md:inline">
+              · {formatBytes(file.size)}
+            </span>
+          )}
+        </a>
+      );
+    })}
+  </div>
+
+  <!-- All-platforms tray. Opens with native <details>; no JS required. -->
+  <details class:list={['group w-full max-w-lg', compact && 'max-w-md mx-auto']}>
+    <summary class="list-none cursor-pointer text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] inline-flex items-center gap-1.5 select-none">
+      <span class="group-open:hidden">Other platforms ↓</span>
+      <span class="hidden group-open:inline">Hide other platforms ↑</span>
+    </summary>
+    <div class="mt-3 card p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {order.flatMap((row) =>
+        row.kinds.map((kind) => {
+          const file = pickFile(row.os, kind);
+          if (!file) return null;
+          return (
+            <a
+              href={file.url}
+              class="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-[var(--color-bg-2)] transition-colors"
+            >
+              <span class="flex items-center gap-2 min-w-0">
+                <span class="text-xs font-mono uppercase text-[var(--color-text-faint)] w-12 shrink-0">
+                  {platformLabel(row.os as 'mac' | 'windows' | 'linux')}
+                </span>
+                <span class="text-sm truncate">{kindLabel(file.kind)}</span>
+                {file.arch === 'arm64' && (
+                  <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-[var(--color-bg-3)] text-[var(--color-text-faint)]">
+                    arm64
+                  </span>
+                )}
+              </span>
+              <span class="text-xs font-mono text-[var(--color-text-faint)] shrink-0">
+                {formatBytes(file.size)}
+              </span>
+            </a>
+          );
+        })
+      )}
+    </div>
+    <p class="mt-2 text-xs text-[var(--color-text-faint)] font-mono">
+      v{release.version} · checksums on the <a href="/download" class="underline hover:text-[var(--color-text-muted)]">download page</a>
+    </p>
+  </details>
+</div>
+
+<!-- Switch on [data-os] to reveal the right button. Default to linux on the server. -->
+<style is:global>
+  :root:not([data-os]) [data-os-cta="linux"],
+  [data-os="linux"]   [data-os-cta="linux"],
+  [data-os="mac"]     [data-os-cta="mac"],
+  [data-os="windows"] [data-os-cta="windows"] {
+    display: inline-flex !important;
+  }
+</style>

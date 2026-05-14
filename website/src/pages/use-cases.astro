@@ -1,0 +1,119 @@
+---
+import Base from '../layouts/Base.astro';
+import Section from '../components/Section.astro';
+import ScreenshotFrame from '../components/ScreenshotFrame.astro';
+import DownloadCTA from '../components/DownloadCTA.astro';
+
+const cases = [
+  {
+    id: 'solo',
+    label: 'Solo developer',
+    headline: 'Backups for your $5 VPS without the 4 AM dread.',
+    problem: 'You run a side project on a single VPS — maybe Hetzner, maybe DigitalOcean, maybe a Raspberry Pi at home. You know you should back up. You also know that "I\'ll set up cron later" turned into "I should fix that" turned into "ugh, the database is gone."',
+    workflow: [
+      'Add your VPS once with your SSH key.',
+      'Tunnex finds the Postgres / Mongo container automatically.',
+      'Hit Backup before every deploy, or after every meaningful import. That\'s it.',
+    ],
+    outcome: '<strong>Result:</strong> backups become a 4-second ritual instead of a 40-line bash script you never updated.',
+  },
+  {
+    id: 'agency',
+    label: 'Agency with multiple clients',
+    headline: 'Ten clients, ten VPSes, one inventory.',
+    problem: 'Each client has their own server. Each server has its own access details. Each access detail lives in a different password manager note. Before every deploy you SCP a dump out, hope you remembered the right database name, and pray.',
+    workflow: [
+      'Each client server lives in the tree, grouped under VPS.',
+      'Targets are named per environment per client — <code>acme-prod</code>, <code>acme-staging</code>, <code>contoso-prod</code>.',
+      'One click backs up everything you\'re about to touch.',
+    ],
+    outcome: '<strong>Result:</strong> a deploy-day checklist with one item instead of fifteen, and every backup encrypted on your machine the moment it lands.',
+  },
+  {
+    id: 'team',
+    label: 'Small team — environment migrations',
+    headline: 'Move data between environments without copy-pasting connection strings.',
+    problem: 'Staging needs a fresh snapshot of prod, anonymised. Or QA wants the dataset their bug repro is hitting. Whoever does it ends up shelling into both servers, fiddling with pg_dump, scping the file, hoping the version mismatch isn\'t fatal.',
+    workflow: [
+      'Both environments are already targets in Tunnex.',
+      'Backup from one, switch the target picker in Restore, hit go.',
+      'Optional CLEAN-first wipes the destination database before restore so there\'s no schema drift.',
+    ],
+    outcome: '<strong>Result:</strong> "refresh staging from prod" is a 30-second self-service action your whole team can do, not a tribal ritual only one person knows.',
+  },
+  {
+    id: 'local',
+    label: 'Local-first development',
+    headline: 'Snapshot your dev database before you nuke it.',
+    problem: 'You\'re testing a migration. You\'re fuzzing some import logic. You know the data on your laptop is annoying to reproduce and the prod-anonymised dump took an hour to generate. One <code>npm run reset</code> too many and it\'s gone.',
+    workflow: [
+      'Tunnex treats your local Docker the same as a VPS — same UI, same dumps folder.',
+      'Quick backup before risky operations; restore in seconds if you regret them.',
+      'Dumps are tagged by date/time so version-hopping while debugging is trivial.',
+    ],
+    outcome: '<strong>Result:</strong> your iteration loop gets shorter. Risky migrations stop being scary.',
+  },
+];
+---
+<Base title="Use cases — Tunnex" description="How real teams use Tunnex: solo devs, agencies, env migrations, and local-first development workflows.">
+  <section class="hero-bg border-b border-[var(--color-border)]">
+    <div class="max-w-6xl mx-auto px-5 pt-20 pb-12 text-center">
+      <p class="text-[var(--color-accent)] uppercase tracking-wider text-xs font-mono font-semibold mb-3">Use cases</p>
+      <h1 class="text-4xl sm:text-5xl font-semibold tracking-tight mb-4">Who is Tunnex for?</h1>
+      <p class="text-lg text-[var(--color-text-muted)] max-w-2xl mx-auto">
+        Four shapes of team that built up enough scar tissue from manual backups to want something better.
+      </p>
+    </div>
+  </section>
+
+  <div class="max-w-6xl mx-auto px-5 py-20 space-y-20">
+    {cases.map((c, i) => (
+      <article id={c.id} class="grid lg:grid-cols-5 gap-10 items-start">
+        <div class="lg:col-span-3 lg:order-1">
+          <span class="inline-block text-[var(--color-accent)] uppercase tracking-wider text-xs font-mono font-semibold mb-3">
+            {c.label}
+          </span>
+          <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight mb-4 leading-tight">{c.headline}</h2>
+          <p class="text-[var(--color-text-muted)] leading-relaxed mb-6" set:html={c.problem}></p>
+
+          <div class="card p-5 mb-5">
+            <h3 class="text-sm font-semibold uppercase tracking-wider text-[var(--color-text)] mb-3">How Tunnex helps</h3>
+            <ol class="space-y-2 text-sm text-[var(--color-text-muted)] list-decimal list-inside marker:text-[var(--color-text-faint)]">
+              {c.workflow.map((w) => <li set:html={w}></li>)}
+            </ol>
+          </div>
+          <p class="text-[var(--color-text)] leading-relaxed" set:html={c.outcome}></p>
+        </div>
+        <div class="lg:col-span-2 lg:order-2">
+          <ScreenshotFrame alt={c.label}>
+            <div class="text-xs font-mono text-[var(--color-text-faint)] p-10 text-center">
+              <p class="text-[var(--color-text)] text-sm mb-2">{c.label}</p>
+              <p>Place a screenshot at /screenshots/{c.id}.png</p>
+            </div>
+          </ScreenshotFrame>
+        </div>
+      </article>
+    ))}
+  </div>
+
+  <section class="border-t border-[var(--color-border)] bg-[var(--color-bg-1)]">
+    <div class="max-w-3xl mx-auto px-5 py-16 text-center">
+      <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight mb-3">Managing a fleet of databases?</h2>
+      <p class="text-[var(--color-text-muted)] mb-6">
+        Scheduled off-site backups, central reporting, and SSO are on the post-1.0 roadmap.
+        If that sounds useful, add yourself to the waitlist and we'll keep you posted.
+      </p>
+      <a href="mailto:hello@tunnex.app?subject=Managed%20backups%20waitlist" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-[var(--color-accent)] text-white font-medium hover:bg-[var(--color-accent)]/90 transition-colors">
+        Join the waitlist
+      </a>
+    </div>
+  </section>
+
+  <Section align="center">
+    <div class="max-w-xl mx-auto text-center">
+      <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight mb-4">Sound like your workflow?</h2>
+      <p class="text-[var(--color-text-muted)] mb-6">Tunnex is free during beta and installs in under a minute.</p>
+      <DownloadCTA compact />
+    </div>
+  </Section>
+</Base>

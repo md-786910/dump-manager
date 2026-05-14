@@ -1,0 +1,40 @@
+---
+import Logo from './Logo.astro';
+import VersionChip from './VersionChip.astro';
+const pathname = Astro.url.pathname.replace(/\/$/, '') || '/';
+const links = [
+  { href: '/product', label: 'Product' },
+  { href: '/use-cases', label: 'Use cases' },
+  { href: '/about', label: 'About' },
+  { href: '/download', label: 'Download' },
+];
+const isActive = (href: string) => pathname === href;
+---
+<header class="sticky top-0 z-50 backdrop-blur bg-[var(--color-bg)]/80 border-b border-[var(--color-border)]">
+  <div class="max-w-6xl mx-auto px-5 h-14 flex items-center gap-6">
+    <a href="/" class="flex items-center"><Logo /></a>
+    <nav class="hidden sm:flex items-center gap-1 text-sm">
+      {links.map((l) => (
+        <a
+          href={l.href}
+          class={`px-3 py-1.5 rounded-md transition-colors ${
+            isActive(l.href)
+              ? 'text-[var(--color-text)] bg-[var(--color-bg-2)]'
+              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+          }`}
+        >
+          {l.label}
+        </a>
+      ))}
+    </nav>
+    <div class="ml-auto flex items-center gap-3">
+      <VersionChip />
+      <a
+        href="/download"
+        class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)]/90 transition-colors"
+      >
+        Download
+      </a>
+    </div>
+  </div>
+</header>

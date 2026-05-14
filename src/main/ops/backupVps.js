@@ -12,6 +12,7 @@ const crypto = require('node:crypto');
 const { PassThrough } = require('node:stream');
 
 const channel = require('../exec/channel');
+const { resolveDockerSudo } = require('../exec/dockerSudo');
 const { EncryptStream } = require('../crypto/stream');
 const pg = require('../db/postgres');
 const mg = require('../db/mongo');
@@ -106,10 +107,11 @@ async function run(opts) {
   let command;
   let execEnv;
   if (target.kind === 'docker-compose-vps') {
+    const sudo = await resolveDockerSudo(ch, server);
     if (target.engine === 'mongo') {
       command = mg.mongoDumpCommand({
         composeBin: server.composeBin,
-        sudo: !!server.sudoForDocker,
+        sudo,
         composeProjectPath: target.vps && target.vps.composeProjectPath,
         projectName: target.vps && target.vps.projectName,
         service: target.vps.service,
@@ -121,7 +123,7 @@ async function run(opts) {
     } else {
       command = pg.vpsDumpCommand({
         composeBin: server.composeBin,
-        sudo: !!server.sudoForDocker,
+        sudo,
         composeProjectPath: target.vps && target.vps.composeProjectPath,
         projectName: target.vps && target.vps.projectName,
         service: target.vps.service,

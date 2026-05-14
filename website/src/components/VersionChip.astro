@@ -1,0 +1,8 @@
+---
+import { getReleaseInfo } from '../lib/releases';
+const { version } = await getReleaseInfo();
+---
+<a href="/download" class="inline-flex items-center gap-1.5 text-xs font-mono px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/40 transition-colors">
+  <span class="size-1.5 rounded-full bg-[var(--color-success)]"></span>
+  v{version} · beta
+</a>

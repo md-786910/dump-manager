@@ -1,19 +1,38 @@
 {
-  "name": "dbmanager",
+  "name": "tunnex",
+  "productName": "Tunnex",
   "version": "0.1.0",
   "description": "Secure desktop tool for backing up and restoring Postgres / Mongo databases on docker-compose VPS or external URIs",
   "main": "src/main/index.js",
   "private": true,
+  "author": {
+    "name": "Tunnex",
+    "email": "noreply@example.com"
+  },
+  "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
-    "dev": "DBM_DEV=1 electron .",
+    "dev": "TUNNEX_DEV=1 electron .",
     "dev:web": "node scripts/dev-server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "pack": "electron-builder --dir",
+    "build": "electron-builder -lwm",
+    "build:linux": "electron-builder -l",
+    "build:win": "electron-builder -w",
+    "build:mac": "electron-builder -m",
+    "release": "node scripts/release.js",
+    "site": "npm --prefix website run dev",
+    "site:build": "npm --prefix website run build",
+    "site:preview": "npm --prefix website run preview"
   },
   "devDependencies": {
-    "electron": "^33.0.0"
+    "@aws-sdk/client-s3": "^3.713.0",
+    "dotenv": "^16.4.5",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
   },
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "ssh2": "^1.16.0"
   }
 }

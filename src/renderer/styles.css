@@ -1,4 +1,4 @@
-/* dbManager — design tokens + base layout
+/* Tunnex — design tokens + base layout
    Visual language: near-monochrome neutrals, single blue accent, red reserved for destructive.
    Density: 8px grid, compact-comfortable. Type: Inter + JetBrains Mono fallbacks. */
 
@@ -74,7 +74,7 @@ body {
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   display: grid;
-  grid-template-rows: 36px 1fr auto 26px;
+  grid-template-rows: 36px 1fr auto auto 26px;
   user-select: none;
 }
 
@@ -86,6 +86,12 @@ body {
   padding: 0 12px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
+}
+.app-bar__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
 }
 .app-bar__title {
   font-size: var(--fs-secondary);
@@ -255,6 +261,49 @@ body {
   text-align: center;
 }
 .status-bar__badge--error { background: var(--danger); color: var(--danger-fg); }
+.status-bar__version {
+  color: var(--text-faint);
+  font-size: var(--fs-meta);
+  padding: 0 8px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  margin: 0 2px;
+}
+.status-bar__version:empty { display: none; }
+
+/* Update banner — sits just above the status bar; non-blocking. */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  font-size: var(--fs-meta);
+  color: var(--text);
+  background: var(--bg-elev-1);
+  border-top: 1px solid var(--border);
+}
+.update-banner[hidden] { display: none; }
+.update-banner--error { color: var(--danger); }
+.update-banner__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+}
+.update-banner__text { flex: 1; min-width: 0; }
+.update-banner__bar {
+  width: 120px;
+  height: 4px;
+  background: var(--bg-elev-3);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.update-banner__bar-inner {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width var(--t-fast);
+}
+.update-banner__actions { display: inline-flex; gap: 4px; }
 
 /* Logs drawer */
 .logs-drawer {
@@ -393,6 +442,19 @@ body[data-dev-mock="1"]::after {
 .tree__server { padding: 4px 0; }
 .tree__server + .tree__server { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
 
+.tree__section {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 10px 8px 4px;
+  user-select: none;
+}
+.tree__section:first-child { padding-top: 4px; }
+/* The first server inside a section shouldn't get the inter-server top border */
+.tree__section + .tree__server { border-top: none; padding-top: 4px; margin-top: 0; }
+
 .tree__server-row {
   display: grid;
   grid-template-columns: 14px 20px 1fr auto auto auto;
@@ -402,6 +464,7 @@ body[data-dev-mock="1"]::after {
   border-radius: var(--r-md);
   cursor: pointer;
   color: var(--text);
+  position: relative;
 }
 
 /* Server kind icon */
@@ -452,13 +515,29 @@ body[data-dev-mock="1"]::after {
   min-width: 18px;
   text-align: center;
 }
+/* Actions overlay the badge+meta area on hover so the row stays compact when
+   idle. Pointer events disabled when hidden so they don't intercept clicks. */
 .tree__server-actions {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   gap: 2px;
+  padding: 2px 4px;
+  border-radius: var(--r-md);
+  background: var(--bg-elev-2);
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--t-fast);
 }
-.tree__server-row:hover .tree__server-actions { opacity: 1; }
+.tree__server-row:hover .tree__server-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* When actions are shown, fade the badge+meta so they don't bleed through */
+.tree__server-row:hover .tree__badge,
+.tree__server-row:hover .tree__server-meta { opacity: 0; }
 
 .iconbtn--xs {
   width: 22px; height: 22px;
@@ -1077,3 +1156,85 @@ select.input:focus {
   color: var(--text);
 }
 .viewdb__doc-empty { color: var(--text-faint); font-size: var(--fs-secondary); padding: 20px 14px; }
+
+/* ── First-run privacy / welcome dialog ──────────────────────────────────── */
+.privacy-modal { z-index: 200; } /* sits above all other modals (z-index: 100) */
+.privacy-modal__backdrop { pointer-events: none; } /* cannot click through to dismiss */
+.privacy-modal__card {
+  width: 500px;
+  max-width: 94vw;
+}
+
+.privacy-hero {
+  text-align: center;
+  padding: 32px 28px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.privacy-hero__icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 14px;
+  display: block;
+}
+.privacy-hero__title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--text);
+}
+.privacy-hero__sub {
+  margin: 0;
+  font-size: var(--fs-secondary);
+  color: var(--text-muted);
+}
+
+.privacy-body {
+  padding: 22px 28px;
+}
+.privacy-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.privacy-list li {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  font-size: var(--fs-body);
+  color: var(--text);
+  line-height: 1.55;
+}
+.privacy-list__icon {
+  font-size: 17px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.privacy-list li strong { color: var(--text); font-weight: 600; }
+
+.privacy-footer {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 16px 22px;
+}
+.privacy-footer .form__checkbox {
+  gap: 10px;
+  font-size: var(--fs-body);
+}
+.privacy-footer .btn--primary {
+  width: 100%;
+  justify-content: center;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+.privacy-footer .btn--primary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}

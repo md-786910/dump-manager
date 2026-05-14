@@ -54,7 +54,7 @@
             + Server
           </button>
           <button class="btn btn--ghost btn--sm" id="btnNewTarget">
-            + Target
+            + Profile
           </button>
         </div>
       </aside>
@@ -409,6 +409,10 @@
                   <strong>+ Server</strong> button.</span
                 >
               </label>
+              <div class="form__field" id="composeLoadFromServer" hidden>
+                <button type="button" class="btn btn--ghost btn--sm" id="composeLoadBtn">Load projects from server…</button>
+                <span class="form__hint" id="composeLoadHint">Requires entering the SSH passphrase. You can also fill the fields above manually.</span>
+              </div>
               <div class="form__field" id="composePickerStatus" hidden>
                 <span class="form__hint mono" id="composePickerStatusText"></span>
               </div>
@@ -490,10 +494,6 @@
                   <span class="form__label">Auth database</span>
                   <input class="input mono" name="vps_mongoAuthDb" placeholder="admin" value="admin" />
                 </label>
-              </div>
-              <div class="form__field" id="composeLoadFromServer" hidden>
-                <button type="button" class="btn btn--ghost btn--sm" id="composeLoadBtn">Load projects from server…</button>
-                <span class="form__hint" id="composeLoadHint">Requires entering the SSH passphrase. You can also fill the fields above manually.</span>
               </div>
             </div>
 

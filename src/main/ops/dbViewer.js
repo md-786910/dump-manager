@@ -3,16 +3,18 @@
 const pg = require('../db/postgres');
 const mg = require('../db/mongo');
 const runCommand = require('../exec/runCommand');
+const { resolveDockerSudo } = require('../exec/dockerSudo');
 
-async function listTables(ch, target) {
+async function listTables(ch, target, server) {
   let cmd;
   if (target.kind === 'external-uri') {
     cmd = pg.psqlUriListTablesCommand();
   } else {
     const v = target.vps || {};
+    const sudo = await resolveDockerSudo(ch, server);
     cmd = pg.psqlListTablesCommand({
       composeBin: target.composeBin || 'docker compose',
-      sudo: target.sudoForDocker || false,
+      sudo,
       projectName: v.projectName || null,
       composeProjectPath: v.composeProjectPath || null,
       service: v.service,
@@ -28,15 +30,16 @@ async function listTables(ch, target) {
   return pg.parsePsqlTableList(stdout);
 }
 
-async function queryTable(ch, target, { schema, table, offset }) {
+async function queryTable(ch, target, { schema, table, offset }, server) {
   let cmd;
   if (target.kind === 'external-uri') {
     cmd = pg.psqlUriQueryTableCommand({ schema, table, offset });
   } else {
     const v = target.vps || {};
+    const sudo = await resolveDockerSudo(ch, server);
     cmd = pg.psqlQueryTableCommand({
       composeBin: target.composeBin || 'docker compose',
-      sudo: target.sudoForDocker || false,
+      sudo,
       projectName: v.projectName || null,
       composeProjectPath: v.composeProjectPath || null,
       service: v.service,
@@ -57,12 +60,13 @@ async function queryTable(ch, target, { schema, table, offset }) {
   return { columns, rows: rows.slice(0, 50), hasMore };
 }
 
-async function listDatabases(ch, target) {
+async function listDatabases(ch, target, server) {
   if (target.kind === 'external-uri') throw Object.assign(new Error('DB list not available for URI targets'), { code: 'URI_TARGET' });
   const v = target.vps || {};
+  const sudo = await resolveDockerSudo(ch, server);
   const cmd = pg.psqlListDbsCommand({
     composeBin: target.composeBin || 'docker compose',
-    sudo: target.sudoForDocker || false,
+    sudo,
     projectName: v.projectName || null,
     composeProjectPath: v.composeProjectPath || null,
     service: v.service,
@@ -78,11 +82,11 @@ async function listDatabases(ch, target) {
 
 // --- MongoDB View DB ---
 
-function _mongoVpsOpts(target) {
+function _mongoVpsOpts(target, sudo) {
   const v = target.vps || {};
   return {
     composeBin: target.composeBin || 'docker compose',
-    sudo: target.sudoForDocker || false,
+    sudo,
     projectName: v.projectName || null,
     composeProjectPath: v.composeProjectPath || null,
     service: v.service,
@@ -94,12 +98,13 @@ function _mongoVpsOpts(target) {
   };
 }
 
-async function listCollections(ch, target) {
+async function listCollections(ch, target, server) {
   let cmd;
   if (target.kind === 'external-uri') {
     cmd = mg.mongoUriListCollectionsCommand({ dbName: target.dbName });
   } else {
-    cmd = mg.mongoListCollectionsCommand(_mongoVpsOpts(target));
+    const sudo = await resolveDockerSudo(ch, server);
+    cmd = mg.mongoListCollectionsCommand(_mongoVpsOpts(target, sudo));
   }
   const { stdout, stderr, exitCode } = await runCommand(ch, cmd);
   if (exitCode !== 0) {
@@ -109,12 +114,13 @@ async function listCollections(ch, target) {
   return mg.parseMongoCollections(stdout);
 }
 
-async function queryCollection(ch, target, { collection, offset }) {
+async function queryCollection(ch, target, { collection, offset }, server) {
   let cmd;
   if (target.kind === 'external-uri') {
     cmd = mg.mongoUriQueryCollectionCommand({ collection, offset: offset || 0 });
   } else {
-    cmd = mg.mongoQueryCollectionCommand({ ..._mongoVpsOpts(target), collection, offset: offset || 0 });
+    const sudo = await resolveDockerSudo(ch, server);
+    cmd = mg.mongoQueryCollectionCommand({ ..._mongoVpsOpts(target, sudo), collection, offset: offset || 0 });
   }
   const { stdout, stderr, exitCode } = await runCommand(ch, cmd);
   if (exitCode !== 0) {

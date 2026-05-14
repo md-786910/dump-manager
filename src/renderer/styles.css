@@ -393,6 +393,19 @@ body[data-dev-mock="1"]::after {
 .tree__server { padding: 4px 0; }
 .tree__server + .tree__server { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
 
+.tree__section {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 10px 8px 4px;
+  user-select: none;
+}
+.tree__section:first-child { padding-top: 4px; }
+/* The first server inside a section shouldn't get the inter-server top border */
+.tree__section + .tree__server { border-top: none; padding-top: 4px; margin-top: 0; }
+
 .tree__server-row {
   display: grid;
   grid-template-columns: 14px 20px 1fr auto auto auto;
@@ -402,6 +415,7 @@ body[data-dev-mock="1"]::after {
   border-radius: var(--r-md);
   cursor: pointer;
   color: var(--text);
+  position: relative;
 }
 
 /* Server kind icon */
@@ -452,13 +466,29 @@ body[data-dev-mock="1"]::after {
   min-width: 18px;
   text-align: center;
 }
+/* Actions overlay the badge+meta area on hover so the row stays compact when
+   idle. Pointer events disabled when hidden so they don't intercept clicks. */
 .tree__server-actions {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   gap: 2px;
+  padding: 2px 4px;
+  border-radius: var(--r-md);
+  background: var(--bg-elev-2);
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--t-fast);
 }
-.tree__server-row:hover .tree__server-actions { opacity: 1; }
+.tree__server-row:hover .tree__server-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* When actions are shown, fade the badge+meta so they don't bleed through */
+.tree__server-row:hover .tree__badge,
+.tree__server-row:hover .tree__server-meta { opacity: 0; }
 
 .iconbtn--xs {
   width: 22px; height: 22px;

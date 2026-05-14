@@ -102,7 +102,7 @@ const state = {
   for (const btn of document.querySelectorAll('#targetForm .segmented__btn')) {
     btn.addEventListener('click', () => selectKind(btn.dataset.kind));
   }
-  $('targetServerPicker').addEventListener('change', () => refreshComposePickers());
+  $('targetServerPicker').addEventListener('change', onTargetServerChange);
   document.querySelector('#targetForm select[name="engine"]').addEventListener('change', (e) => selectEngine(e.target.value));
   // Installed kind: engine change also updates default port
   $('installedServerPicker').addEventListener('change', () => {});
@@ -206,8 +206,15 @@ function renderServerTree() {
     else standalone.push(t);
   }
 
+  // Split servers into VPS (ssh) and LOCAL groups. Render VPS first.
+  const vpsServers = state.servers.filter((s) => s.kind !== 'local');
+  const localServers = state.servers.filter((s) => s.kind === 'local');
+  const groups = [];
+  if (vpsServers.length) groups.push({ label: 'VPS', servers: vpsServers });
+  if (localServers.length) groups.push({ label: 'LOCAL', servers: localServers });
+
   const parts = [];
-  for (const server of state.servers) {
+  const renderServer = (server) => {
     const targets = byServer.get(server.id) || [];
     const collapsed = state.collapsedServers.has(server.id);
     const caret = collapsed ? '▸' : '▾';
@@ -281,6 +288,11 @@ function renderServerTree() {
       }
     }
     parts.push('</div>');
+  };
+
+  for (const group of groups) {
+    parts.push('<div class="tree__section">' + group.label + '</div>');
+    for (const server of group.servers) renderServer(server);
   }
 
   if (standalone.length) {
@@ -471,6 +483,20 @@ function serverPickerSubtitle(s) {
     return s.wslDistro ? 'local · WSL: ' + s.wslDistro : 'local';
   }
   return s.host || 'ssh';
+}
+
+function buildServerOptionsHtml(servers, { includeNoneOption = false } = {}) {
+  const locals = servers.filter((s) => s.kind === 'local');
+  const sshs = servers.filter((s) => s.kind === 'ssh');
+  const opt = (s) =>
+    '<option value="' + s.id + '">' +
+      escapeHtml(s.name) + ' (' + escapeHtml(serverPickerSubtitle(s)) + ')' +
+    '</option>';
+  const parts = [];
+  if (includeNoneOption) parts.push('<option value="">(this machine)</option>');
+  if (locals.length) parts.push('<optgroup label="LOCAL">' + locals.map(opt).join('') + '</optgroup>');
+  if (sshs.length) parts.push('<optgroup label="VPS">' + sshs.map(opt).join('') + '</optgroup>');
+  return parts.join('');
 }
 
 async function populateWslDistros() {
@@ -665,12 +691,11 @@ function openTargetModal(existing, defaults) {
   // Populate server pickers (docker-compose and installed share the same server list).
   const picker = $('targetServerPicker');
   picker.innerHTML = state.servers.length
-    ? state.servers.map((s) => '<option value="' + s.id + '">' + escapeHtml(s.name) + ' (' + escapeHtml(serverPickerSubtitle(s)) + ')</option>').join('')
+    ? buildServerOptionsHtml(state.servers)
     : '<option value="">No servers — add one first</option>';
 
   const instPicker = $('installedServerPicker');
-  instPicker.innerHTML = '<option value="">(this machine)</option>' +
-    state.servers.map((s) => '<option value="' + s.id + '">' + escapeHtml(s.name) + ' (' + escapeHtml(serverPickerSubtitle(s)) + ')</option>').join('');
+  instPicker.innerHTML = buildServerOptionsHtml(state.servers, { includeNoneOption: true });
 
   if (existing) {
     form.elements.name.value = existing.name;
@@ -714,8 +739,10 @@ function openTargetModal(existing, defaults) {
   $('targetModal').hidden = false;
   setTimeout(() => form.elements.name.focus(), 0);
   // Fire-and-forget: populate the project dropdown if we already have a
-  // cached SSH session for the selected server.
-  refreshComposePickers();
+  // cached SSH session for the selected server. Programmatic .value
+  // assignment above doesn't fire 'change' — dispatch it so the same path
+  // runs whether the server was set programmatically or by the user.
+  $('targetServerPicker').dispatchEvent(new Event('change'));
 }
 
 function closeTargetModal() {
@@ -821,6 +848,25 @@ function hideComposePickers() {
 function showComposeStatus(text) {
   $('composePickerStatus').hidden = false;
   $('composePickerStatusText').textContent = text;
+}
+
+function onTargetServerChange() {
+  // If the user picked a server different from the one originally saved on
+  // the target being edited, the previously-saved compose project path and
+  // service belong to the old server and would show up as a misleading
+  // "(current)" option. Clear them so the new server's project list drives
+  // the selection.
+  const form = $('targetForm');
+  const newServerId = form.elements.serverId.value;
+  const original = editingTargetId
+    ? state.targets.find((t) => t.id === editingTargetId)
+    : null;
+  const originalServerId = original ? original.serverId : null;
+  if (editingTargetId && newServerId !== originalServerId) {
+    form.elements.vps_composeProjectPath.value = '';
+    form.elements.vps_service.value = '';
+  }
+  refreshComposePickers();
 }
 
 async function refreshComposePickers(opts = {}) {

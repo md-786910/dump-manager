@@ -15,6 +15,7 @@
 
 const channel = require('../exec/channel');
 const runCommand = require('../exec/runCommand');
+const { resolveDockerSudo } = require('../exec/dockerSudo');
 const pg = require('../db/postgres');
 const mg = require('../db/mongo');
 
@@ -53,7 +54,7 @@ async function run(opts) {
 
   try {
     emit('probing-docker');
-    const sudo = !!server.sudoForDocker;
+    const sudo = await resolveDockerSudo(ch, server);
     const dialect = await probeComposeBin(ch, { sudo });
 
     emit('listing-projects');
@@ -186,7 +187,7 @@ async function listProjects({ server, privateKey, passphrase, knownHosts, onUntr
   });
 
   try {
-    const sudo = !!server.sudoForDocker;
+    const sudo = await resolveDockerSudo(ch, server);
     const dialect = await probeComposeBin(ch, { sudo });
 
     const lsCmd = pg.composeListCommand({ composeBin: dialect.composeBin, sudo });

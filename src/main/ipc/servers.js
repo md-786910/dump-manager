@@ -5,16 +5,21 @@ const { ipcMain, BrowserWindow, dialog } = require('electron');
 const sshClient = require('../ssh/client');
 const testConnection = require('../ops/testConnection');
 const channel = require('../exec/channel');
+const { resolveDockerSudo, invalidate: invalidateDockerSudo } = require('../exec/dockerSudo');
 const logging = require('../logging');
 
 function register({ servers, targets, knownHosts, passphraseCache, audit, app }) {
   ipcMain.handle('servers:list', () => servers.list());
   ipcMain.handle('servers:create', (_e, input) => servers.create(input));
-  ipcMain.handle('servers:update', (_e, { id, patch }) => servers.update(id, patch));
+  ipcMain.handle('servers:update', (_e, { id, patch }) => {
+    invalidateDockerSudo(id);
+    return servers.update(id, patch);
+  });
   ipcMain.handle('servers:delete', (_e, { id, cascade }) => {
     if (cascade) targets.removeManyByServer(id);
     servers.remove(id);
     passphraseCache.drop(id);
+    invalidateDockerSudo(id);
     return { ok: true };
   });
 
@@ -27,12 +32,15 @@ function register({ servers, targets, knownHosts, passphraseCache, audit, app })
     try { server = servers.get(serverId); }
     catch (err) { return { ok: false, error: err.message }; }
 
-    // Local server probe: just run `docker compose version` (with sudo if
-    // configured), no SSH, no passphrase prompt.
+    // Local server probe: resolve sudo (auto-skip if docker works unprivileged)
+    // and then run `docker compose version` with the effective prefix.
     if (server.kind === 'local') {
       try {
         const ch = await channel.connect(server);
-        const stream = await ch.exec((server.sudoForDocker ? 'sudo ' : '') + 'docker compose version --short 2>/dev/null || docker-compose --version 2>/dev/null');
+        // Force a fresh probe so the test reflects current docker state.
+        invalidateDockerSudo(server.id);
+        const sudo = await resolveDockerSudo(ch, server);
+        const stream = await ch.exec((sudo ? 'sudo ' : '') + 'docker compose version --short 2>/dev/null || docker-compose --version 2>/dev/null');
         const result = await new Promise((resolve, reject) => {
           let stdout = '', exitCode = null;
           stream.on('data', (c) => { stdout += c.toString('utf8'); });

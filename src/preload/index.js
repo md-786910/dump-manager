@@ -18,7 +18,7 @@ const INVOKE_CHANNELS = new Set([
   'logs:tail', 'logs:append',
   'dialog:pickKeyFile', 'dialog:confirm', 'wsl:listDistros',
   'settings:get', 'settings:ensureDumpsDir', 'settings:pickDumpsDir',
-  'db:listTables', 'db:queryTable', 'db:listDatabases',
+  'db:listTables', 'db:queryTable', 'db:listDatabases', 'db:listCollections', 'db:queryCollection',
 ]);
 
 const RECV_CHANNELS = new Set([
@@ -113,5 +113,8 @@ contextBridge.exposeInMainWorld('dbm', {
     queryTable: (targetId, schema, table, offset, passphrase) =>
       invoke('db:queryTable', { targetId, schema, table, offset, passphrase }),
     listDatabases: (targetId, passphrase) => invoke('db:listDatabases', { targetId, passphrase }),
+    listCollections: (targetId, passphrase) => invoke('db:listCollections', { targetId, passphrase }),
+    queryCollection: (targetId, collection, offset, passphrase) =>
+      invoke('db:queryCollection', { targetId, collection, offset, passphrase }),
   },
 });

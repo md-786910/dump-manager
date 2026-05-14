@@ -16,6 +16,7 @@
 const channel = require('../exec/channel');
 const runCommand = require('../exec/runCommand');
 const pg = require('../db/postgres');
+const mg = require('../db/mongo');
 
 async function probeComposeBin(ch, { sudo }) {
   // Try v2.
@@ -91,40 +92,69 @@ async function run(opts) {
         continue;
       }
 
-      const pgServices = [];
+      const discoveredServices = [];
       for (const svc of services) {
-        if (!pg.isPostgresImage(svc.image)) continue;
+        const isPostgres = pg.isPostgresImage(svc.image);
+        const isMongo = pg.isMongoImage(svc.image);
+        if (!isPostgres && !isMongo) continue;
 
         emit('reading-databases', row.name + '/' + svc.name);
-        // Discover the Postgres superuser (env var inside container).
-        const envCmd = pg.printenvCommand({
-          composeBin: dialect.composeBin, sudo, projectName: row.name, composeProjectPath,
-          service: svc.name, varName: 'POSTGRES_USER',
-        });
-        const envRes = await runCommand(ch, envCmd);
-        const pgUser = (envRes.stdout || '').trim() || 'postgres';
 
-        // List databases.
-        const psqlCmd = pg.psqlListDbsCommand({
-          composeBin: dialect.composeBin, sudo, projectName: row.name, composeProjectPath,
-          service: svc.name, pgUser,
-        });
-        const psql = await runCommand(ch, psqlCmd);
-        let databases = [];
-        let svcError = null;
-        if (psql.exitCode === 0) {
-          databases = pg.parsePsqlDbList(psql.stdout);
+        if (isPostgres) {
+          // Discover the Postgres superuser (env var inside container).
+          const envCmd = pg.printenvCommand({
+            composeBin: dialect.composeBin, sudo, projectName: row.name, composeProjectPath,
+            service: svc.name, varName: 'POSTGRES_USER',
+          });
+          const envRes = await runCommand(ch, envCmd);
+          const pgUser = (envRes.stdout || '').trim() || 'postgres';
+
+          // List databases.
+          const psqlCmd = pg.psqlListDbsCommand({
+            composeBin: dialect.composeBin, sudo, projectName: row.name, composeProjectPath,
+            service: svc.name, pgUser,
+          });
+          const psql = await runCommand(ch, psqlCmd);
+          let databases = [];
+          let svcError = null;
+          if (psql.exitCode === 0) {
+            databases = pg.parsePsqlDbList(psql.stdout);
+          } else {
+            svcError = (psql.stderr || 'psql failed').trim();
+          }
+
+          discoveredServices.push({
+            name: svc.name, image: svc.image, engine: 'postgres',
+            pgUser, databases, error: svcError,
+          });
         } else {
-          svcError = (psql.stderr || 'psql failed').trim();
-        }
+          // MongoDB service — probe shell, then list databases.
+          const probeCmd = mg.mongoShellProbeCommand({
+            composeBin: dialect.composeBin, sudo, projectName: row.name, composeProjectPath,
+            service: svc.name,
+          });
+          const probeRes = await runCommand(ch, probeCmd);
+          const shell = (probeRes.stdout || '').trim() === 'mongosh' ? 'mongosh' : 'mongo';
 
-        pgServices.push({
-          name: svc.name,
-          image: svc.image,
-          pgUser,
-          databases,
-          error: svcError,
-        });
+          const listCmd = mg.mongoListDbsCommand({
+            composeBin: dialect.composeBin, sudo, projectName: row.name, composeProjectPath,
+            service: svc.name, shell,
+          });
+          const listRes = await runCommand(ch, listCmd);
+          let databases = [];
+          let svcError = null;
+          if (listRes.exitCode === 0) {
+            try { databases = mg.parseMongoDbs(listRes.stdout); }
+            catch { svcError = 'failed to parse db list'; }
+          } else {
+            svcError = (listRes.stderr || 'mongosh failed').trim();
+          }
+
+          discoveredServices.push({
+            name: svc.name, image: svc.image, engine: 'mongo',
+            mongoShell: shell, databases, error: svcError,
+          });
+        }
       }
 
       projects.push({
@@ -132,7 +162,7 @@ async function run(opts) {
         composeFile,
         composeProjectPath,
         status: row.status,
-        services: pgServices,
+        services: discoveredServices,
       });
     }
 

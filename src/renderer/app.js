@@ -73,6 +73,8 @@ const state = {
   $('btnViewDb').addEventListener('click', onViewDb);
   $('viewDbModalClose').addEventListener('click', closeViewDbModal);
   $('viewDbPrev').addEventListener('click', () => viewDbChangePage(-1));
+  $('viewDbDocPrev').addEventListener('click', () => viewDbChangePage(-1));
+  $('viewDbDocNext').addEventListener('click', () => viewDbChangePage(1));
   $('viewDbNext').addEventListener('click', () => viewDbChangePage(1));
   $('opCancelBtn').addEventListener('click', onCancelBackup);
   $('opDismissBtn').addEventListener('click', dismissOpPanel);
@@ -91,6 +93,9 @@ const state = {
     btn.addEventListener('click', () => selectKind(btn.dataset.kind));
   }
   $('targetServerPicker').addEventListener('change', () => refreshComposePickers());
+  document.querySelector('#targetForm select[name="engine"]').addEventListener('change', (e) => selectEngine(e.target.value));
+  // Installed kind: engine change also updates default port
+  $('installedServerPicker').addEventListener('change', () => {});
   $('composeProjectSelect').addEventListener('change', onComposeProjectChange);
   $('composeServiceSelect').addEventListener('change', onComposeServiceChange);
   $('composeRefresh').addEventListener('click', () => refreshComposePickers({ force: true }));
@@ -346,9 +351,18 @@ function renderMainPanel() {
   tag.className = 'tag tag--' + t.envTag;
 
   const server = selectedServer();
-  const kindLabel = t.kind === 'docker-compose-vps' && server
-    ? 'docker-compose · ' + server.user + '@' + server.host + ':' + server.port + ' · service: ' + (t.vps && t.vps.service)
-    : t.kind === 'docker-compose-vps' ? 'docker-compose (orphan: server missing)' : 'external-uri';
+  let kindLabel;
+  if (t.kind === 'docker-compose-vps') {
+    kindLabel = server
+      ? 'docker-compose · ' + _serverLabel(server, t) + ' · service: ' + (t.vps && t.vps.service)
+      : 'docker-compose (orphan: server missing)';
+  } else if (t.kind === 'installed') {
+    const ins = t.installed || {};
+    const srvPart = server ? ' via ' + server.name : ' (local)';
+    kindLabel = 'installed · ' + (ins.host || 'localhost') + (ins.port ? ':' + ins.port : '') + srvPart;
+  } else {
+    kindLabel = 'external-uri';
+  }
   $('pvSub').textContent = t.engine + ' · ' + kindLabel + ' · db: ' + t.dbName;
 
   const ds = dumpsForSelected();
@@ -638,11 +652,15 @@ function openTargetModal(existing, defaults) {
   $('targetFormError').hidden = true;
   $('targetModalTitle').textContent = existing ? 'Edit target' : 'New target';
 
-  // Populate server picker.
+  // Populate server pickers (docker-compose and installed share the same server list).
   const picker = $('targetServerPicker');
   picker.innerHTML = state.servers.length
     ? state.servers.map((s) => '<option value="' + s.id + '">' + escapeHtml(s.name) + ' (' + escapeHtml(serverPickerSubtitle(s)) + ')</option>').join('')
     : '<option value="">No servers — add one first</option>';
+
+  const instPicker = $('installedServerPicker');
+  instPicker.innerHTML = '<option value="">(this machine)</option>' +
+    state.servers.map((s) => '<option value="' + s.id + '">' + escapeHtml(s.name) + ' (' + escapeHtml(serverPickerSubtitle(s)) + ')</option>').join('');
 
   if (existing) {
     form.elements.name.value = existing.name;
@@ -650,6 +668,7 @@ function openTargetModal(existing, defaults) {
     form.elements.engine.value = existing.engine;
     form.elements.dbName.value = existing.dbName;
     selectKind(existing.kind);
+    selectEngine(existing.engine || 'postgres');
     if (existing.kind === 'docker-compose-vps') {
       if (existing.serverId) form.elements.serverId.value = existing.serverId;
       form.elements.vps_composeProjectPath.value = (existing.vps && existing.vps.composeProjectPath) || '';
@@ -657,6 +676,18 @@ function openTargetModal(existing, defaults) {
       form.elements.vps_pgUser.value = (existing.vps && existing.vps.pgUser) || '';
       const cl = existing.vps && existing.vps.compressionLevel;
       form.elements.vps_compressionLevel.value = cl == null ? '' : String(cl);
+      // Mongo fields
+      form.elements.vps_mongoUser.value = (existing.vps && existing.vps.mongoUser) || '';
+      form.elements.vps_mongoAuthDb.value = (existing.vps && existing.vps.mongoAuthDb) || 'admin';
+      // mongoPassword is never pre-filled (re-enter to change)
+    } else if (existing.kind === 'installed') {
+      const ins = existing.installed || {};
+      $('installedServerPicker').value = existing.serverId || '';
+      form.elements.installed_host.value = ins.host || 'localhost';
+      form.elements.installed_port.value = ins.port ? String(ins.port) : '';
+      form.elements.installed_dbUser.value = ins.dbUser || '';
+      form.elements.installed_mongoAuthDb.value = ins.mongoAuthDb || 'admin';
+      // dbPassword never pre-filled
     }
   } else {
     selectKind((defaults && defaults.kind) || 'docker-compose-vps');
@@ -691,6 +722,26 @@ function selectKind(kind) {
   for (const el of document.querySelectorAll('#targetForm [data-show-when]')) {
     el.hidden = el.dataset.showWhen !== kind;
   }
+  // Re-apply engine visibility whenever kind changes.
+  selectEngine($('targetForm').elements.engine.value || 'postgres');
+}
+
+function selectEngine(engine) {
+  for (const el of document.querySelectorAll('#targetForm [data-show-engine]')) {
+    el.hidden = el.dataset.showEngine !== engine;
+  }
+  // Update URI placeholder for the engine type.
+  const uriInput = document.querySelector('#targetForm input[name="uri"]');
+  if (uriInput) {
+    uriInput.placeholder = engine === 'mongo'
+      ? 'mongodb://user:pass@host:27017/db'
+      : 'postgresql://user:pass@host:5432/db';
+  }
+  // Update installed default port hint.
+  const portInput = $('installed_port');
+  if (portInput && !portInput.value) {
+    portInput.placeholder = engine === 'mongo' ? '27017' : '5432';
+  }
 }
 
 async function onTargetSubmit(e) {
@@ -717,6 +768,19 @@ async function onTargetSubmit(e) {
       service: f.vps_service.value.trim(),
       pgUser: f.vps_pgUser.value.trim() || null,
       compressionLevel: f.vps_compressionLevel.value === '' ? null : Number(f.vps_compressionLevel.value),
+      mongoUser: f.vps_mongoUser.value.trim() || null,
+      mongoPassword: f.vps_mongoPassword.value || null,
+      mongoAuthDb: f.vps_mongoAuthDb.value.trim() || 'admin',
+    };
+  } else if (kind === 'installed') {
+    const srvId = $('installedServerPicker').value;
+    input.serverId = srvId || null;
+    input.installed = {
+      host: f.installed_host.value.trim() || 'localhost',
+      port: f.installed_port.value.trim() || null,
+      dbUser: f.installed_dbUser.value.trim() || null,
+      dbPassword: f.installed_dbPassword.value || null,
+      mongoAuthDb: f.installed_mongoAuthDb.value.trim() || 'admin',
     };
   } else {
     input.uri = f.uri.value;
@@ -873,13 +937,16 @@ function populateComposeServicePicker(opt) {
   select.innerHTML = opts.join('');
   wrap.hidden = false;
 
-  // Auto-fill the service input if there's exactly one Postgres service and
-  // the user hasn't already chosen something.
+  // Auto-fill the service input if there's exactly one matching service for
+  // the selected engine (postgres or mongo).
   if (!currentService) {
-    const pgServices = services.filter((s) => s.isPostgres);
-    if (pgServices.length === 1) {
-      select.value = pgServices[0].name;
-      $('targetForm').elements.vps_service.value = pgServices[0].name;
+    const engine = $('targetForm').elements.engine.value || 'postgres';
+    const matching = engine === 'mongo'
+      ? services.filter((s) => s.isMongo)
+      : services.filter((s) => s.isPostgres);
+    if (matching.length === 1) {
+      select.value = matching[0].name;
+      $('targetForm').elements.vps_service.value = matching[0].name;
     }
   }
 }
@@ -900,47 +967,67 @@ async function onDeleteTarget() {
 
 // ---------- View DB ----------
 
-const vdb = { targetId: null, passphrase: null, schema: null, table: null, page: 0, hasMore: false };
+const vdb = {
+  targetId: null, engine: 'postgres', passphrase: null,
+  schema: null, table: null, collection: null,
+  page: 0, hasMore: false,
+};
 
 async function onViewDb() {
   const t = selectedTarget(); if (!t) return;
   const server = selectedServer();
 
-  // Ask for passphrase if needed (SSH VPS with a key that may be passphrase-protected).
   let pass;
   if (server && server.kind === 'ssh' && server.privateKeyPath) {
     pass = await askPassphrase(server.name);
-    if (pass === null) return; // user cancelled
+    if (pass === null) return;
   }
 
   vdb.targetId = t.id;
+  vdb.engine = t.engine || 'postgres';
   vdb.passphrase = pass || null;
-  vdb.schema = null;
-  vdb.table = null;
-  vdb.page = 0;
+  vdb.schema = null; vdb.table = null; vdb.collection = null;
+  vdb.page = 0; vdb.hasMore = false;
 
+  const isMongo = vdb.engine === 'mongo';
   $('viewDbTitle').textContent = 'View DB — ' + escapeHtml(t.dbName);
+  $('viewDbSidebarHead').textContent = isMongo ? 'Collections' : 'Tables';
   $('viewDbTableList').innerHTML = '';
   $('viewDbLoading').hidden = false;
   $('viewDbError').hidden = true;
   $('viewDbEmpty').hidden = false;
   $('viewDbDataWrap').hidden = true;
+  $('viewDbDocWrap').hidden = true;
   $('viewDbDataLoading').hidden = true;
   $('viewDbDataError').hidden = true;
   $('viewDbModal').hidden = false;
 
-  const res = await window.dbm.db.listTables(t.id, pass || undefined);
-  $('viewDbLoading').hidden = true;
-  if (!res.ok) {
-    $('viewDbError').textContent = res.error || 'Failed to list tables.';
-    $('viewDbError').hidden = false;
-    return;
+  if (isMongo) {
+    const res = await window.dbm.db.listCollections(t.id, pass || undefined);
+    $('viewDbLoading').hidden = true;
+    if (!res.ok) {
+      $('viewDbError').textContent = res.error || 'Failed to list collections.';
+      $('viewDbError').hidden = false;
+      return;
+    }
+    renderViewDbCollectionList(res.collections || []);
+  } else {
+    const res = await window.dbm.db.listTables(t.id, pass || undefined);
+    $('viewDbLoading').hidden = true;
+    if (!res.ok) {
+      $('viewDbError').textContent = res.error || 'Failed to list tables.';
+      $('viewDbError').hidden = false;
+      return;
+    }
+    renderViewDbTableList(res.tables || []);
   }
-  renderViewDbTableList(res.tables || []);
 }
+
+// --- PostgreSQL table list ---
 
 function renderViewDbTableList(tables) {
   const ul = $('viewDbTableList');
+  $('viewDbEmpty').textContent = 'Select a table to view its data.';
   if (!tables.length) {
     ul.innerHTML = '<li style="pointer-events:none;color:var(--text-faint)">No tables found.</li>';
     return;
@@ -952,15 +1039,6 @@ function renderViewDbTableList(tables) {
       '<span class="viewdb__tbl-rows">' + (tbl.approxRows >= 0 ? tbl.approxRows.toLocaleString() : '') + '</span>' +
     '</li>'
   ).join('');
-  ul.addEventListener('click', (e) => {
-    const li = e.target.closest('li[data-table]');
-    if (!li) return;
-    ul.querySelectorAll('li').forEach((el) => el.classList.remove('is-active'));
-    li.classList.add('is-active');
-    selectViewDbTable(li.dataset.schema, li.dataset.table);
-  }, { once: true });
-  // Re-attach on subsequent calls by replacing node (innerHTML replaces listeners).
-  // Actually since we use innerHTML every time, we need a delegated listener:
   ul.onclick = (e) => {
     const li = e.target.closest('li[data-table]');
     if (!li) return;
@@ -971,9 +1049,7 @@ function renderViewDbTableList(tables) {
 }
 
 async function selectViewDbTable(schema, table) {
-  vdb.schema = schema;
-  vdb.table = table;
-  vdb.page = 0;
+  vdb.schema = schema; vdb.table = table; vdb.page = 0;
   await fetchViewDbPage();
 }
 
@@ -983,11 +1059,9 @@ async function fetchViewDbPage() {
   $('viewDbDataLoading').hidden = false;
   $('viewDbDataError').hidden = true;
 
-  const offset = vdb.page * 50;
   const res = await window.dbm.db.queryTable(
-    vdb.targetId, vdb.schema, vdb.table, offset, vdb.passphrase || undefined
+    vdb.targetId, vdb.schema, vdb.table, vdb.page * 50, vdb.passphrase || undefined
   );
-
   $('viewDbDataLoading').hidden = true;
   if (!res.ok) {
     $('viewDbDataError').textContent = res.error || 'Failed to fetch rows.';
@@ -999,10 +1073,8 @@ async function fetchViewDbPage() {
 
 function renderViewDbGrid({ columns, rows, hasMore }) {
   vdb.hasMore = !!hasMore;
-
   $('viewDbHead').innerHTML =
     '<tr>' + (columns || []).map((c) => '<th>' + escapeHtml(c) + '</th>').join('') + '</tr>';
-
   $('viewDbBody').innerHTML = (rows || []).map((row) =>
     '<tr>' + row.map((cell) =>
       cell === null || cell === ''
@@ -1010,7 +1082,6 @@ function renderViewDbGrid({ columns, rows, hasMore }) {
         : '<td title="' + escapeHtml(cell) + '">' + escapeHtml(cell) + '</td>'
     ).join('') + '</tr>'
   ).join('');
-
   const pageNum = vdb.page + 1;
   $('viewDbPageLabel').textContent = rows.length === 0 ? 'No rows' : 'Page ' + pageNum;
   $('viewDbPrev').disabled = vdb.page === 0;
@@ -1018,22 +1089,86 @@ function renderViewDbGrid({ columns, rows, hasMore }) {
   $('viewDbDataWrap').hidden = false;
 }
 
+// --- MongoDB collection list + document view ---
+
+function renderViewDbCollectionList(collections) {
+  const ul = $('viewDbTableList');
+  $('viewDbEmpty').textContent = 'Select a collection to view its documents.';
+  if (!collections.length) {
+    ul.innerHTML = '<li style="pointer-events:none;color:var(--text-faint)">No collections found.</li>';
+    return;
+  }
+  ul.innerHTML = collections.map((col) =>
+    '<li data-collection="' + escapeHtml(col) + '">' + escapeHtml(col) + '</li>'
+  ).join('');
+  ul.onclick = (e) => {
+    const li = e.target.closest('li[data-collection]');
+    if (!li) return;
+    ul.querySelectorAll('li').forEach((el) => el.classList.remove('is-active'));
+    li.classList.add('is-active');
+    selectViewDbCollection(li.dataset.collection);
+  };
+}
+
+async function selectViewDbCollection(collection) {
+  vdb.collection = collection; vdb.page = 0;
+  await fetchViewDbDocPage();
+}
+
+async function fetchViewDbDocPage() {
+  $('viewDbEmpty').hidden = true;
+  $('viewDbDocWrap').hidden = true;
+  $('viewDbDataLoading').hidden = false;
+  $('viewDbDataError').hidden = true;
+
+  const res = await window.dbm.db.queryCollection(
+    vdb.targetId, vdb.collection, vdb.page * 50, vdb.passphrase || undefined
+  );
+  $('viewDbDataLoading').hidden = true;
+  if (!res.ok) {
+    $('viewDbDataError').textContent = res.error || 'Failed to fetch documents.';
+    $('viewDbDataError').hidden = false;
+    return;
+  }
+  renderViewDbDocs(res);
+}
+
+function renderViewDbDocs({ documents, hasMore }) {
+  vdb.hasMore = !!hasMore;
+  const list = $('viewDbDocList');
+  if (!documents || !documents.length) {
+    list.innerHTML = '<div class="viewdb__doc-empty">No documents.</div>';
+    $('viewDbDocWrap').hidden = false;
+    $('viewDbDocPrev').disabled = true;
+    $('viewDbDocNext').disabled = true;
+    $('viewDbDocPageLabel').textContent = 'Empty collection';
+    return;
+  }
+  list.innerHTML = documents.map((doc) => {
+    let pretty;
+    try { pretty = JSON.stringify(doc, null, 2); }
+    catch { pretty = String(doc); }
+    return '<pre class="viewdb__doc">' + escapeHtml(pretty) + '</pre>';
+  }).join('');
+  $('viewDbDocPageLabel').textContent = 'Page ' + (vdb.page + 1);
+  $('viewDbDocPrev').disabled = vdb.page === 0;
+  $('viewDbDocNext').disabled = !hasMore;
+  $('viewDbDocWrap').hidden = false;
+}
+
 function viewDbChangePage(delta) {
   const next = vdb.page + delta;
   if (next < 0) return;
   if (delta > 0 && !vdb.hasMore) return;
   vdb.page = next;
-  fetchViewDbPage();
+  if (vdb.engine === 'mongo') fetchViewDbDocPage();
+  else fetchViewDbPage();
 }
 
 function closeViewDbModal() {
   $('viewDbModal').hidden = true;
-  vdb.targetId = null;
-  vdb.passphrase = null;
-  vdb.schema = null;
-  vdb.table = null;
-  vdb.page = 0;
-  vdb.hasMore = false;
+  Object.assign(vdb, { targetId: null, engine: 'postgres', passphrase: null,
+    schema: null, table: null, collection: null, page: 0, hasMore: false });
 }
 
 // ---------- passphrase modal ----------

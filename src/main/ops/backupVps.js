@@ -14,6 +14,7 @@ const { PassThrough } = require('node:stream');
 const channel = require('../exec/channel');
 const { EncryptStream } = require('../crypto/stream');
 const pg = require('../db/postgres');
+const mg = require('../db/mongo');
 const dumps = require('../storage/dumps');
 
 // `opts`:
@@ -41,10 +42,13 @@ async function run(opts) {
     if (!server) throw new Error('server is required for docker-compose-vps target');
   } else if (target.kind === 'external-uri') {
     if (!uri) throw new Error('uri is required for external-uri target');
+  } else if (target.kind === 'installed') {
+    // server optional (null = run on this machine). installed.host required.
+    if (!target.installed || !target.installed.host) throw new Error('installed.host is required');
   } else {
     throw new Error('unsupported target.kind: ' + target.kind);
   }
-  const isLocal = !server || server.kind === 'local' || target.kind === 'external-uri';
+  const isLocal = !server || server.kind === 'local' || target.kind === 'external-uri' || target.kind === 'installed';
 
   dumps.ensureDir(userDataApp);
   const startedAt = new Date();
@@ -102,20 +106,59 @@ async function run(opts) {
   let command;
   let execEnv;
   if (target.kind === 'docker-compose-vps') {
-    command = pg.vpsDumpCommand({
-      composeBin: server.composeBin,
-      sudo: !!server.sudoForDocker,
-      composeProjectPath: target.vps && target.vps.composeProjectPath,
-      projectName: target.vps && target.vps.projectName,
-      service: target.vps.service,
-      dbName: target.dbName,
-      pgUser: target.vps && target.vps.pgUser,
-      compressionLevel: target.vps && target.vps.compressionLevel,
-    });
+    if (target.engine === 'mongo') {
+      command = mg.mongoDumpCommand({
+        composeBin: server.composeBin,
+        sudo: !!server.sudoForDocker,
+        composeProjectPath: target.vps && target.vps.composeProjectPath,
+        projectName: target.vps && target.vps.projectName,
+        service: target.vps.service,
+        dbName: target.dbName,
+        mongoUser: target.vps && target.vps.mongoUser,
+        mongoPassword: target.vps && target.vps.mongoPassword,
+        mongoAuthDb: target.vps && target.vps.mongoAuthDb,
+      });
+    } else {
+      command = pg.vpsDumpCommand({
+        composeBin: server.composeBin,
+        sudo: !!server.sudoForDocker,
+        composeProjectPath: target.vps && target.vps.composeProjectPath,
+        projectName: target.vps && target.vps.projectName,
+        service: target.vps.service,
+        dbName: target.dbName,
+        pgUser: target.vps && target.vps.pgUser,
+        compressionLevel: target.vps && target.vps.compressionLevel,
+      });
+    }
+  } else if (target.kind === 'installed') {
+    // Installed DB — pg_dump / mongodump run directly (no docker compose wrapper).
+    // For local channels: pass password via spawn env (cleaner).
+    // For SSH channels: embed PGPASSWORD/MONGO_PWD inline (SSH env forwarding is unreliable).
+    const ins = target.installed;
+    const embedPassword = !!(server && server.kind === 'ssh');
+    if (target.engine === 'mongo') {
+      command = mg.mongoInstalledDumpCommand({
+        host: ins.host, port: ins.port, dbName: target.dbName,
+        mongoUser: ins.dbUser, mongoPassword: ins.dbPassword,
+        mongoAuthDb: ins.mongoAuthDb, embedPassword,
+      });
+      if (!embedPassword && ins.dbPassword) execEnv = { MONGO_PWD: ins.dbPassword };
+    } else {
+      command = pg.installedDumpCommand({
+        host: ins.host, port: ins.port, dbUser: ins.dbUser, dbName: target.dbName,
+        compressionLevel: null, embedPassword, dbPassword: ins.dbPassword,
+      });
+      if (!embedPassword && ins.dbPassword) execEnv = { PGPASSWORD: ins.dbPassword };
+    }
   } else {
     // external-uri — pass URI via env so it isn't visible in process listings.
-    command = pg.uriDumpCommand({ compressionLevel: target.uriOpts && target.uriOpts.compressionLevel });
-    execEnv = { PGURI: uri };
+    if (target.engine === 'mongo') {
+      command = mg.mongoUriDumpCommand();
+      execEnv = { MONGOURI: uri };
+    } else {
+      command = pg.uriDumpCommand({ compressionLevel: target.uriOpts && target.uriOpts.compressionLevel });
+      execEnv = { PGURI: uri };
+    }
   }
 
   emit('starting-dump');

@@ -13,6 +13,7 @@ const { PassThrough } = require('node:stream');
 const channel = require('../exec/channel');
 const { DecryptStream } = require('../crypto/stream');
 const pg = require('../db/postgres');
+const mg = require('../db/mongo');
 
 // `opts`:
 //   server, target        — resolved records
@@ -38,11 +39,13 @@ async function run(opts) {
     if (!server) throw new Error('server is required for docker-compose-vps target');
   } else if (target.kind === 'external-uri') {
     if (!uri) throw new Error('uri is required for external-uri target');
+  } else if (target.kind === 'installed') {
+    if (!target.installed || !target.installed.host) throw new Error('installed.host is required');
   } else {
     throw new Error('unsupported target.kind: ' + target.kind);
   }
   if (!fs.existsSync(dumpPath)) throw new Error('dump file not found: ' + dumpPath);
-  const isLocal = !server || server.kind === 'local' || target.kind === 'external-uri';
+  const isLocal = !server || server.kind === 'local' || target.kind === 'external-uri' || target.kind === 'installed';
 
   const startedAt = new Date();
   const emit = (phase, extra) => { if (onProgress) try { onProgress({ phase, ...(extra || {}) }); } catch {} };
@@ -87,19 +90,56 @@ async function run(opts) {
   let command;
   let execEnv;
   if (target.kind === 'docker-compose-vps') {
-    command = pg.vpsRestoreCommand({
-      composeBin: server.composeBin,
-      sudo: !!server.sudoForDocker,
-      composeProjectPath: target.vps && target.vps.composeProjectPath,
-      projectName: target.vps && target.vps.projectName,
-      service: target.vps.service,
-      dbName: dbNameOverride || target.dbName,
-      pgUser: target.vps && target.vps.pgUser,
-      cleanFirst: !!cleanFirst,
-    });
+    if (target.engine === 'mongo') {
+      command = mg.mongoRestoreCommand({
+        composeBin: server.composeBin,
+        sudo: !!server.sudoForDocker,
+        composeProjectPath: target.vps && target.vps.composeProjectPath,
+        projectName: target.vps && target.vps.projectName,
+        service: target.vps.service,
+        dbName: target.dbName,
+        dbNameOverride,
+        mongoUser: target.vps && target.vps.mongoUser,
+        mongoPassword: target.vps && target.vps.mongoPassword,
+        mongoAuthDb: target.vps && target.vps.mongoAuthDb,
+      });
+    } else {
+      command = pg.vpsRestoreCommand({
+        composeBin: server.composeBin,
+        sudo: !!server.sudoForDocker,
+        composeProjectPath: target.vps && target.vps.composeProjectPath,
+        projectName: target.vps && target.vps.projectName,
+        service: target.vps.service,
+        dbName: dbNameOverride || target.dbName,
+        pgUser: target.vps && target.vps.pgUser,
+        cleanFirst: !!cleanFirst,
+      });
+    }
+  } else if (target.kind === 'installed') {
+    const ins = target.installed;
+    const embedPassword = !!(server && server.kind === 'ssh');
+    if (target.engine === 'mongo') {
+      command = mg.mongoInstalledRestoreCommand({
+        host: ins.host, port: ins.port, dbName: target.dbName, dbNameOverride,
+        mongoUser: ins.dbUser, mongoPassword: ins.dbPassword,
+        mongoAuthDb: ins.mongoAuthDb, embedPassword,
+      });
+      if (!embedPassword && ins.dbPassword) execEnv = { MONGO_PWD: ins.dbPassword };
+    } else {
+      command = pg.installedRestoreCommand({
+        host: ins.host, port: ins.port, dbUser: ins.dbUser, dbName: target.dbName,
+        dbNameOverride, cleanFirst: !!cleanFirst, embedPassword, dbPassword: ins.dbPassword,
+      });
+      if (!embedPassword && ins.dbPassword) execEnv = { PGPASSWORD: ins.dbPassword };
+    }
   } else {
-    command = pg.uriRestoreCommand({ cleanFirst: !!cleanFirst });
-    execEnv = { PGURI: uri };
+    if (target.engine === 'mongo') {
+      command = mg.mongoUriRestoreCommand();
+      execEnv = { MONGOURI: uri };
+    } else {
+      command = pg.uriRestoreCommand({ cleanFirst: !!cleanFirst });
+      execEnv = { PGURI: uri };
+    }
   }
 
   emit('starting-restore');

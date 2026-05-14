@@ -122,6 +122,29 @@ function pgIdent(s) {
   return '"' + String(s).replace(/"/g, '""') + '"';
 }
 
+// --- Installed (direct, non-Docker) backup/restore ---
+// embedPassword: true → prepend PGPASSWORD=… to command (needed for SSH channels
+// where spawn env vars aren't reliably forwarded). false → rely on PGPASSWORD
+// being set in the channel's spawn env (local channels, via execOpts.env).
+
+function installedDumpCommand({ host, port, dbUser, dbName, compressionLevel, embedPassword, dbPassword }) {
+  const cl = normalizeCompressionLevel(compressionLevel);
+  const h = shQuote(host || 'localhost');
+  const p = port ? ' -p ' + Number(port) : '';
+  const u = dbUser ? ' -U ' + shQuote(dbUser) : '';
+  const passPrefix = embedPassword && dbPassword ? 'PGPASSWORD=' + shQuote(dbPassword) + ' ' : '';
+  return passPrefix + 'pg_dump -Fc --verbose -Z ' + cl + ' -h ' + h + p + u + ' -d ' + shQuote(dbName);
+}
+
+function installedRestoreCommand({ host, port, dbUser, dbName, dbNameOverride, cleanFirst, embedPassword, dbPassword }) {
+  const h = shQuote(host || 'localhost');
+  const p = port ? ' -p ' + Number(port) : '';
+  const u = dbUser ? ' -U ' + shQuote(dbUser) : '';
+  const cleanFlag = cleanFirst ? ' --clean --if-exists' : '';
+  const passPrefix = embedPassword && dbPassword ? 'PGPASSWORD=' + shQuote(dbPassword) + ' ' : '';
+  return passPrefix + 'pg_restore' + cleanFlag + ' -h ' + h + p + u + ' -d ' + shQuote(dbNameOverride || dbName);
+}
+
 // --- View DB helpers ---
 
 const LIST_TABLES_SQL =
@@ -275,6 +298,8 @@ module.exports = {
   normalizeCompressionLevel,
   shQuote,
   pgIdent,
+  installedDumpCommand,
+  installedRestoreCommand,
   composePrefix,
   vpsDumpCommand,
   vpsRestoreCommand,

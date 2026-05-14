@@ -1,6 +1,7 @@
 'use strict';
 
 const pg = require('../db/postgres');
+const mg = require('../db/mongo');
 const runCommand = require('../exec/runCommand');
 
 async function listTables(ch, target) {
@@ -75,4 +76,52 @@ async function listDatabases(ch, target) {
   return pg.parsePsqlDbList(stdout);
 }
 
-module.exports = { listTables, queryTable, listDatabases };
+// --- MongoDB View DB ---
+
+function _mongoVpsOpts(target) {
+  const v = target.vps || {};
+  return {
+    composeBin: target.composeBin || 'docker compose',
+    sudo: target.sudoForDocker || false,
+    projectName: v.projectName || null,
+    composeProjectPath: v.composeProjectPath || null,
+    service: v.service,
+    dbName: target.dbName,
+    mongoUser: v.mongoUser || null,
+    mongoPassword: v.mongoPassword || null,
+    mongoAuthDb: v.mongoAuthDb || 'admin',
+    shell: v.mongoShell || 'mongosh',
+  };
+}
+
+async function listCollections(ch, target) {
+  let cmd;
+  if (target.kind === 'external-uri') {
+    cmd = mg.mongoUriListCollectionsCommand({ dbName: target.dbName });
+  } else {
+    cmd = mg.mongoListCollectionsCommand(_mongoVpsOpts(target));
+  }
+  const { stdout, stderr, exitCode } = await runCommand(ch, cmd);
+  if (exitCode !== 0) {
+    const msg = (stderr || stdout || 'mongosh exited ' + exitCode).trim();
+    throw Object.assign(new Error(msg), { code: 'MONGO_ERROR' });
+  }
+  return mg.parseMongoCollections(stdout);
+}
+
+async function queryCollection(ch, target, { collection, offset }) {
+  let cmd;
+  if (target.kind === 'external-uri') {
+    cmd = mg.mongoUriQueryCollectionCommand({ collection, offset: offset || 0 });
+  } else {
+    cmd = mg.mongoQueryCollectionCommand({ ..._mongoVpsOpts(target), collection, offset: offset || 0 });
+  }
+  const { stdout, stderr, exitCode } = await runCommand(ch, cmd);
+  if (exitCode !== 0) {
+    const msg = (stderr || stdout || 'mongosh exited ' + exitCode).trim();
+    throw Object.assign(new Error(msg), { code: 'MONGO_ERROR' });
+  }
+  return mg.parseMongoDocuments(stdout);
+}
+
+module.exports = { listTables, queryTable, listDatabases, listCollections, queryCollection };

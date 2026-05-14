@@ -53,8 +53,10 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
       if (target.kind === 'docker-compose-vps') {
         server = servers.get(target.serverId);
       } else if (target.kind === 'external-uri') {
-        // No server for external-uri targets; the channel runs locally.
         server = null;
+      } else if (target.kind === 'installed') {
+        // installed targets have an optional serverId (null = this machine).
+        server = target.serverId ? servers.get(target.serverId) : null;
       } else {
         throw new Error('unsupported target.kind: ' + target.kind);
       }
@@ -238,6 +240,8 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
         server = servers.get(target.serverId);
       } else if (target.kind === 'external-uri') {
         server = null;
+      } else if (target.kind === 'installed') {
+        server = target.serverId ? servers.get(target.serverId) : null;
       } else {
         throw new Error('unsupported target.kind: ' + target.kind);
       }

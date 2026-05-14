@@ -381,9 +381,16 @@
                 <button
                   type="button"
                   class="segmented__btn"
+                  data-kind="installed"
+                >
+                  Installed DB
+                </button>
+                <button
+                  type="button"
+                  class="segmented__btn"
                   data-kind="external-uri"
                 >
-                  External URI
+                  URI / DSN
                 </button>
               </div>
               <input type="hidden" name="kind" value="docker-compose-vps" />
@@ -444,7 +451,8 @@
                     placeholder="db"
                   />
                 </label>
-                <label class="form__field">
+                <!-- PostgreSQL-only field -->
+                <label class="form__field" data-show-engine="postgres">
                   <span class="form__label">Postgres user</span>
                   <input
                     class="input mono"
@@ -452,8 +460,14 @@
                     placeholder="postgres"
                   />
                 </label>
+                <!-- MongoDB-only fields -->
+                <label class="form__field" data-show-engine="mongo" hidden>
+                  <span class="form__label">Mongo username</span>
+                  <input class="input mono" name="vps_mongoUser" placeholder="root (optional)" />
+                </label>
               </div>
-              <label class="form__field">
+              <!-- PostgreSQL-only -->
+              <label class="form__field" data-show-engine="postgres">
                 <span class="form__label">Dump compression</span>
                 <select class="input" name="vps_compressionLevel">
                   <option value="">Fast (default · -Z 1) — recommended</option>
@@ -466,10 +480,63 @@
                   pg_dump compresses inside the container. Lower levels finish much faster on small VPSes; higher levels save bandwidth at the cost of CPU.
                 </span>
               </label>
+              <!-- MongoDB-only -->
+              <div class="form__row" data-show-engine="mongo" hidden>
+                <label class="form__field">
+                  <span class="form__label">Mongo password</span>
+                  <input class="input" type="password" name="vps_mongoPassword" placeholder="leave blank if no auth" autocomplete="off" />
+                </label>
+                <label class="form__field">
+                  <span class="form__label">Auth database</span>
+                  <input class="input mono" name="vps_mongoAuthDb" placeholder="admin" value="admin" />
+                </label>
+              </div>
               <div class="form__field" id="composeLoadFromServer" hidden>
                 <button type="button" class="btn btn--ghost btn--sm" id="composeLoadBtn">Load projects from server…</button>
                 <span class="form__hint" id="composeLoadHint">Requires entering the SSH passphrase. You can also fill the fields above manually.</span>
               </div>
+            </div>
+
+            <!-- Installed DB — pg_dump / mongodump run directly, no Docker wrapper -->
+            <div data-show-when="installed" hidden>
+              <div class="form__row">
+                <label class="form__field">
+                  <span class="form__label">Server</span>
+                  <select class="input" name="installed_serverId" id="installedServerPicker">
+                    <option value="">(this machine — no server)</option>
+                  </select>
+                  <span class="form__hint">Pick a local or SSH server, or leave blank to run on this Windows machine directly.</span>
+                </label>
+              </div>
+              <div class="form__row">
+                <label class="form__field">
+                  <span class="form__label">Host</span>
+                  <input class="input mono" name="installed_host" placeholder="localhost" value="localhost" />
+                </label>
+                <label class="form__field">
+                  <span class="form__label">Port</span>
+                  <input class="input mono" name="installed_port" id="installed_port" placeholder="5432" />
+                </label>
+              </div>
+              <div class="form__row">
+                <label class="form__field">
+                  <span class="form__label">Username</span>
+                  <input class="input mono" name="installed_dbUser" placeholder="postgres" />
+                </label>
+                <label class="form__field">
+                  <span class="form__label">Password</span>
+                  <input class="input" type="password" name="installed_dbPassword" placeholder="leave blank if no auth" autocomplete="off" />
+                </label>
+              </div>
+              <div class="form__row" data-show-engine="mongo" hidden>
+                <label class="form__field">
+                  <span class="form__label">Auth database</span>
+                  <input class="input mono" name="installed_mongoAuthDb" placeholder="admin" value="admin" />
+                </label>
+              </div>
+              <span class="form__hint">
+                Runs <span class="mono">pg_dump</span> / <span class="mono">mongodump</span> directly on the server — no Docker required. Works with WSL, native Linux, and native Windows installs.
+              </span>
             </div>
 
             <div data-show-when="external-uri" hidden>
@@ -496,8 +563,8 @@
               <label class="form__field">
                 <span class="form__label">Engine</span>
                 <select class="input" name="engine">
-                  <option value="postgres">postgres</option>
-                  <option value="mongo" disabled>mongo (phase 2)</option>
+                  <option value="postgres">PostgreSQL</option>
+                  <option value="mongo">MongoDB</option>
                 </select>
               </label>
               <label class="form__field">
@@ -716,13 +783,14 @@
         </header>
         <div class="viewdb">
           <div class="viewdb__sidebar">
-            <div class="viewdb__sidebar-head">Tables</div>
+            <div class="viewdb__sidebar-head" id="viewDbSidebarHead">Tables</div>
             <div id="viewDbLoading" class="viewdb__status" hidden>Loading…</div>
             <div id="viewDbError" class="viewdb__status viewdb__status--error" hidden></div>
             <ul class="viewdb__table-list" id="viewDbTableList"></ul>
           </div>
           <div class="viewdb__main">
             <div id="viewDbEmpty" class="viewdb__status">Select a table to view its data.</div>
+            <!-- PostgreSQL grid view -->
             <div id="viewDbDataWrap" hidden>
               <div class="viewdb__grid-wrap">
                 <table class="viewdb__grid">
@@ -736,7 +804,16 @@
                 <button type="button" class="btn btn--ghost btn--sm" id="viewDbNext">Next &#8594;</button>
               </div>
             </div>
-            <div id="viewDbDataLoading" class="viewdb__status" hidden>Loading rows…</div>
+            <!-- MongoDB document view -->
+            <div id="viewDbDocWrap" hidden>
+              <div class="viewdb__doc-list" id="viewDbDocList"></div>
+              <div class="viewdb__pager">
+                <button type="button" class="btn btn--ghost btn--sm" id="viewDbDocPrev">&#8592; Prev</button>
+                <span class="viewdb__page-label" id="viewDbDocPageLabel">Page 1</span>
+                <button type="button" class="btn btn--ghost btn--sm" id="viewDbDocNext">Next &#8594;</button>
+              </div>
+            </div>
+            <div id="viewDbDataLoading" class="viewdb__status" hidden>Loading…</div>
             <div id="viewDbDataError" class="viewdb__status viewdb__status--error" hidden></div>
           </div>
         </div>

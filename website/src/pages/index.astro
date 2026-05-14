@@ -1,0 +1,213 @@
+---
+import Base from '../layouts/Base.astro';
+import Section from '../components/Section.astro';
+import DownloadCTA from '../components/DownloadCTA.astro';
+import FeatureCard from '../components/FeatureCard.astro';
+import StepCard from '../components/StepCard.astro';
+import ProblemRow from '../components/ProblemRow.astro';
+import FAQ from '../components/FAQ.astro';
+import ScreenshotFrame from '../components/ScreenshotFrame.astro';
+import { getReleaseInfo, formatBytes } from '../lib/releases';
+
+const release = await getReleaseInfo();
+const heroFile =
+  release.files.find((f) => f.platform === 'linux' && f.kind === 'appimage') ||
+  release.files[0];
+
+const features = [
+  {
+    icon: `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 13v2M11 13v2M2 6h12"/></svg>`,
+    title: 'Encrypted dumps',
+    body: 'Every backup is AES-256-GCM encrypted on your disk with a key held in the OS keychain. Stolen disk ≠ stolen data.',
+  },
+  {
+    icon: `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8a6 6 0 0110.5-4M14 8a6 6 0 01-10.5 4M14 3v3h-3M2 13v-3h3"/></svg>`,
+    title: 'Restore in one click',
+    body: 'Pick a dump, pick a target, hit restore. CLEAN-first option, dump metadata preview, no SSH-juggling required.',
+  },
+  {
+    icon: `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="2" width="14" height="4" rx="1"/><rect x="1" y="9" width="14" height="4" rx="1"/><circle cx="13" cy="4" r="0.8" fill="currentColor" stroke="none"/><circle cx="13" cy="11" r="0.8" fill="currentColor" stroke="none"/></svg>`,
+    title: 'Every server, one tree',
+    body: 'Local Docker and VPS over SSH side by side. Compose projects and Postgres / Mongo services discovered automatically.',
+  },
+  {
+    icon: `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="5"/><path d="M14 14l-3.5-3.5"/></svg>`,
+    title: 'Live DB viewer',
+    body: 'Quick read-only browser for Postgres tables and Mongo collections. No IDE setup, no psql over SSH for a 30-second sanity check.',
+  },
+  {
+    icon: `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13c0-3 2.2-5 5-5s5 2 5 5"/><path d="M5 7l3-3 3 3"/></svg>`,
+    title: 'Auto-updates',
+    body: 'Background download, non-blocking restart prompt, signed manifest. Stay on the latest without thinking about it.',
+  },
+  {
+    icon: `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6h12M5 9h2M5 11h4"/></svg>`,
+    title: 'Local + VPS unified',
+    body: 'Same workflow for the database on your laptop as for one on a $5 VPS. Stop maintaining two sets of scripts.',
+  },
+];
+
+const faqs = [
+  {
+    q: 'Is my data ever uploaded anywhere?',
+    a: 'No. Dumps live exclusively on your machine. Tunnex has no servers, no telemetry, no analytics endpoint that ever sees your data. The only outbound calls the app makes are to your own VPSes (over SSH) and to fetch its own updates.',
+  },
+  {
+    q: 'Does Tunnex need root or sudo?',
+    a: 'Not unless your local Docker requires it. The app probes Docker without sudo first; if your user is in the <code>docker</code> group (the common case on Linux) or you run Docker Desktop, no privilege escalation is needed.',
+  },
+  {
+    q: 'How are the dumps encrypted?',
+    a: 'AES-256-GCM with a 256-bit key generated on first launch and stored in the OS keychain (Keychain on macOS, DPAPI on Windows, libsecret on Linux). The key never touches disk in cleartext. Dumps are unusable on another machine without the same key — so back the key up if you back up the dumps offsite.',
+  },
+  {
+    q: 'How is this different from Borg, Restic, or duplicati?',
+    a: 'Those tools back up <em>files</em>; they are great for filesystem snapshots but they don\'t understand database state. Tunnex runs <code>pg_dump</code> / <code>mongodump</code> inside the live database container so you get a consistent, point-in-time logical dump that restores cleanly into any compatible engine.',
+  },
+  {
+    q: 'What about MySQL / MariaDB / SQLite / Redis?',
+    a: 'Postgres and MongoDB at launch. MySQL/MariaDB is the next engine planned (the docker-compose discovery already enumerates them). SQLite and Redis aren\'t on the roadmap — both are usually backed up at the file level by tools like Restic.',
+  },
+  {
+    q: 'Is there a paid plan?',
+    a: 'No. Tunnex is free during the public beta. Optional managed off-site backups for fleets may arrive after 1.0; the desktop app itself will stay free.',
+  },
+  {
+    q: 'Where do I report bugs or request features?',
+    a: 'Email <a href="mailto:hello@tunnex.app">hello@tunnex.app</a> for now. A public GitHub issue tracker is coming once the API stabilises.',
+  },
+];
+---
+<Base>
+  <!-- HERO -->
+  <section class="hero-bg border-b border-[var(--color-border)]">
+    <div class="max-w-6xl mx-auto px-5 pt-16 pb-20 sm:pt-24 sm:pb-28 grid lg:grid-cols-2 gap-12 items-center">
+      <div>
+        <a href="/about#roadmap" class="inline-flex items-center gap-2 mb-6 px-3 py-1 rounded-full border border-[var(--color-border)] text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/40 transition-colors">
+          <span class="size-1.5 rounded-full bg-[var(--color-success)] animate-pulse"></span>
+          v{release.version} · public beta now live
+        </a>
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight leading-[1.05] mb-5">
+          Backups for the databases<br />
+          <span class="text-[var(--color-accent)]">you actually run.</span>
+        </h1>
+        <p class="text-lg sm:text-xl text-[var(--color-text-muted)] leading-relaxed mb-8 max-w-xl">
+          One desktop app for encrypted <strong class="text-[var(--color-text)]">Postgres</strong> &amp;
+          <strong class="text-[var(--color-text)]">Mongo</strong> dumps from docker-compose VPSes,
+          installed DBs, or any connection URI.
+          <span class="block mt-1 text-[var(--color-text-faint)]">No agents. No cloud. No vendor lock-in.</span>
+        </p>
+        <DownloadCTA />
+        <p class="mt-5 text-xs text-[var(--color-text-faint)] font-mono">
+          Free during beta · v{release.version}{heroFile ? ` · ${formatBytes(heroFile.size)}` : ''} · Windows · macOS · Linux
+        </p>
+      </div>
+      <div class="hidden lg:block">
+        <ScreenshotFrame alt="Tunnex backup in progress">
+          <div class="text-xs font-mono text-[var(--color-text-faint)] p-12 text-center">
+            <p class="text-[var(--color-text)] text-sm mb-2">Tunnex — local [dev]</p>
+            <p>Place a screenshot at <code>/screenshots/hero.png</code></p>
+            <p class="opacity-60 mt-2">…and update ScreenshotFrame `src`.</p>
+          </div>
+        </ScreenshotFrame>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROBLEMS -->
+  <Section eyebrow="Why Tunnex" title="The backup story most teams actually live.">
+    <div class="card divide-y divide-[var(--color-border)]/60 px-6">
+      <ProblemRow
+        title="SSH-and-pg_dump is fine — until it isn't."
+        body="Forgotten backups, half-finished restores, plaintext dumps piling up in ~/Downloads. The fragile script you wrote in 2023 is one tab away from a 4 AM incident."
+      />
+      <ProblemRow
+        title="Your backups shouldn't be plaintext."
+        body="A raw pg_dump file on your laptop is your entire production dataset, unencrypted. Lose the laptop, lose the data. Tunnex encrypts every dump with a key only your OS knows."
+      />
+      <ProblemRow
+        title="One DB is easy. Ten across three VPSes is a spreadsheet."
+        body="Multiple environments, multiple compose projects, multiple databases per project. Tunnex shows the whole inventory as one tree and makes any node one-click backable."
+      />
+    </div>
+  </Section>
+
+  <!-- HOW IT WORKS -->
+  <Section eyebrow="How it works" title="From zero to encrypted dump in under a minute." lead="No agents to install on the server. No cron jobs. Tunnex talks to Docker over your existing SSH key.">
+    <div class="grid sm:grid-cols-3 gap-5 mt-4">
+      <StepCard number={1} title="Add a server"
+        body="Local Docker, VPS over SSH with your private key, or a connection URI for managed Postgres. Add as many as you want; they group as LOCAL and VPS in the sidebar." />
+      <StepCard number={2} title="Tunnex discovers everything"
+        body="One click runs docker compose ls, reads each service's image, and finds Postgres / Mongo databases automatically. Compose projects, services, databases — surfaced as a tree." />
+      <StepCard number={3} title="Hit Backup"
+        body="Streams pg_dump or mongodump from inside the container over SSH, encrypts on the fly with AES-256-GCM, writes to your local backups folder. Restore is a right-click." />
+    </div>
+  </Section>
+
+  <!-- FEATURE GRID -->
+  <Section eyebrow="Built for serious work" title="Everything the SSH-and-script setup was missing.">
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      {features.map((f) => <FeatureCard {...f} />)}
+    </div>
+  </Section>
+
+  <!-- SECURITY -->
+  <section class="border-y border-[var(--color-border)] bg-[var(--color-bg-1)]">
+    <div class="max-w-6xl mx-auto px-5 py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <div>
+          <div class="w-12 h-12 rounded-lg bg-[var(--color-accent-dim)] text-[var(--color-accent)] flex items-center justify-center mb-5">
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="7" width="10" height="7" rx="1.5"/>
+              <path d="M5 7V4.5a3 3 0 016 0V7"/>
+            </svg>
+          </div>
+          <h2 class="text-3xl sm:text-4xl font-semibold tracking-tight mb-3">Security model, in plain English.</h2>
+          <p class="text-[var(--color-text-muted)] leading-relaxed">
+            Cryptography you can audit. No magic. No "trust us." The whole pipeline uses primitives
+            you already trust from your production stack.
+          </p>
+        </div>
+        <ul class="space-y-5">
+          <li class="flex gap-4">
+            <span class="text-[var(--color-accent)] mt-0.5 text-lg">🔐</span>
+            <span><strong>End-to-end encrypted at rest.</strong> Every dump is AES-256-GCM encrypted on your disk. The key is generated on first launch and stored in your OS keychain — never written to a config file.</span>
+          </li>
+          <li class="flex gap-4">
+            <span class="text-[var(--color-accent)] mt-0.5 text-lg">🖥️</span>
+            <span><strong>Stored locally only.</strong> Backups live on your machine. Nothing is sent to any server, cloud service, or third party — ever. Tunnex has no servers of its own.</span>
+          </li>
+          <li class="flex gap-4">
+            <span class="text-[var(--color-accent)] mt-0.5 text-lg">🔑</span>
+            <span><strong>SSH with private keys.</strong> Remote servers are reached exclusively over SSH with key-based auth. Passphrases stay in memory and are never written to disk.</span>
+          </li>
+          <li class="flex gap-4">
+            <span class="text-[var(--color-accent)] mt-0.5 text-lg">📦</span>
+            <span><strong>Open formats.</strong> Dumps are standard pg_dump custom-format (-Fc) and mongodump archives. Readable by any tool. No Tunnex-proprietary blob.</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <Section eyebrow="FAQ" title="Common questions, blunt answers." align="center">
+    <div class="max-w-3xl mx-auto">
+      <FAQ items={faqs} />
+    </div>
+  </Section>
+
+  <!-- FINAL CTA -->
+  <Section align="center">
+    <div class="max-w-2xl mx-auto text-center">
+      <h2 class="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">Ready to never lose a database again?</h2>
+      <p class="text-[var(--color-text-muted)] mb-8 leading-relaxed">
+        v{release.version} is free during public beta. Auto-updates ship the moment a new
+        version lands.
+      </p>
+      <div class="inline-flex flex-col items-center gap-3">
+        <DownloadCTA compact />
+      </div>
+    </div>
+  </Section>
+</Base>

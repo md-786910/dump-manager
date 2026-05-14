@@ -1,0 +1,18 @@
+---
+interface Props {
+  title: string;
+  body: string;
+}
+const { title, body } = Astro.props;
+---
+<div class="flex items-start gap-4 sm:gap-6 py-6 border-b border-[var(--color-border)]/60 last:border-b-0">
+  <div class="hidden sm:flex shrink-0 size-9 rounded-full border border-[var(--color-border)] text-[var(--color-accent)] items-center justify-center mt-0.5">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8h10M9 4l4 4-4 4"/>
+    </svg>
+  </div>
+  <div>
+    <h3 class="text-lg font-semibold tracking-tight mb-1">{title}</h3>
+    <p class="text-[var(--color-text-muted)] leading-relaxed">{body}</p>
+  </div>
+</div>

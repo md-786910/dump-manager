@@ -1,0 +1,81 @@
+name: Release
+
+# Triggered by either:
+#   - a `v*` tag push (e.g. `git tag v0.1.1 && git push --tags`)
+#   - manual run from the Actions tab
+#
+# Each runner builds for its own OS, uploads its artifacts + manifest to R2,
+# and only the Linux job triggers a marketing-site rebuild (one site build per
+# release, not three).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            trigger_site: '1'   # only this job pokes the Cloudflare Pages hook
+          - os: windows-latest
+            platform: win
+            trigger_site: ''
+          - os: macos-latest
+            platform: mac
+            trigger_site: ''
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      # electron-builder needs the version to come from package.json; the tag
+      # is informational. Surface it in logs.
+      - name: Show version
+        shell: bash
+        run: |
+          echo "Building $(node -p "require('./package.json').version") for ${{ matrix.platform }}"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "Triggered by tag ${{ github.ref_name }}"
+          fi
+
+      - name: Build & publish to R2
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          CF_PAGES_DEPLOY_HOOK: ${{ secrets.CF_PAGES_DEPLOY_HOOK }}
+          RELEASE_TRIGGER_SITE_REBUILD: ${{ matrix.trigger_site }}
+          # Skip electron-builder's built-in macOS code-signing attempts on
+          # unsigned beta builds. Both env vars are recognised by builder.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: node scripts/release.js ${{ matrix.platform }}
+
+      # On failure leave the artifacts as a workflow artifact so we can debug
+      # without pushing partial uploads to R2.
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: release/
+          retention-days: 7
+          if-no-files-found: ignore

@@ -63,7 +63,7 @@ function register({ servers, targets, knownHosts, passphraseCache, audit, app })
           ok: false, error: err.message, durationMs: Date.now() - startedAt,
         });
         logging.warn('connection', 'Local probe failed for ' + server.name + ': ' + err.message);
-        return { ok: false, error: err.message };
+        return { ok: false, error: err.message, code: err.code || null };
       }
     }
 

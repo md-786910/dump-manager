@@ -118,7 +118,7 @@ function register({ app, keychain }) {
     }
     const win = BrowserWindow.fromWebContents(event.sender);
     const res = await dialog.showOpenDialog(win, {
-      title: 'Choose where dbManager stores dumps',
+      title: 'Choose where Tunnex stores dumps',
       buttonLabel: 'Use this folder',
       properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'],
     });
@@ -138,7 +138,7 @@ function register({ app, keychain }) {
     const win = BrowserWindow.fromWebContents(event.sender);
     const current = settings.get(app, 'dumpsDir') || dumps.dumpDir(app);
     const res = await dialog.showOpenDialog(win, {
-      title: 'Choose where dbManager stores dumps',
+      title: 'Choose where Tunnex stores dumps',
       defaultPath: current,
       buttonLabel: 'Use this folder',
       properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'],

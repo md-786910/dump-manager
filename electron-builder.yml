@@ -1,0 +1,64 @@
+appId: com.tunnex.app
+productName: Tunnex
+copyright: Copyright © 2026 Tunnex
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+directories:
+  output: release
+  buildResources: build
+
+afterPack: scripts/after-pack.js
+
+files:
+  - src/**/*
+  - package.json
+  - "!**/*.test.js"
+  - "!test/**"
+  - "!scripts/dev-server.js"
+  - "!scripts/release.js"
+  - "!**/*.md"
+
+# Unsigned beta builds.
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  identity: null
+  gatekeeperAssess: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Tunnex
+  uninstallDisplayName: Tunnex
+
+linux:
+  category: Development
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  maintainer: Tunnex <noreply@example.com>
+  synopsis: Secure desktop tool for backing up and restoring Postgres / Mongo databases
+
+# electron-updater reads latest*.yml over plain HTTPS from this URL.
+# Replace <your-r2-public-host> with the public hostname Cloudflare R2 issues
+# (e.g. pub-XXXXXXXXX.r2.dev) or your custom domain.
+publish:
+  provider: generic
+  url: https://pub-d098ab4c32934fd196eb5acec30a1f42.r2.dev/releases/
+  channel: latest
+  useMultipleRangeRequest: true

@@ -1,0 +1,25 @@
+---
+interface Props {
+  alt: string;
+  src?: string;
+  caption?: string;
+}
+const { alt, src, caption } = Astro.props;
+---
+<figure class="frame">
+  <div class="frame__bar">
+    <span class="frame__dot"></span>
+    <span class="frame__dot"></span>
+    <span class="frame__dot"></span>
+    <span class="ml-3 text-xs text-[var(--color-text-faint)] font-mono">Tunnex</span>
+  </div>
+  {src ? (
+    <img src={src} alt={alt} loading="lazy" decoding="async" class="block w-full h-auto" />
+  ) : (
+    <div class="aspect-[16/10] bg-gradient-to-br from-[var(--color-bg-2)] to-[var(--color-bg)] flex items-center justify-center">
+      <slot />
+      <span class="sr-only">{alt}</span>
+    </div>
+  )}
+</figure>
+{caption && <figcaption class="mt-3 text-xs text-[var(--color-text-faint)] font-mono text-center">{caption}</figcaption>}

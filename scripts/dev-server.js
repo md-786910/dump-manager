@@ -41,7 +41,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log('dbManager dev server: http://localhost:' + PORT);
+  console.log('Tunnex dev server: http://localhost:' + PORT);
   console.log('  serving: ' + ROOT);
   console.log('  the renderer uses src/renderer/dev-mock.js as a stand-in for the Electron preload bridge.');
 });

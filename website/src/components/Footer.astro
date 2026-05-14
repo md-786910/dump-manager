@@ -1,0 +1,42 @@
+---
+import Logo from './Logo.astro';
+const year = new Date().getFullYear();
+---
+<footer class="border-t border-[var(--color-border)] bg-[var(--color-bg-1)] mt-24">
+  <div class="max-w-6xl mx-auto px-5 py-12 grid grid-cols-2 sm:grid-cols-4 gap-8 text-sm">
+    <div class="col-span-2 sm:col-span-1">
+      <Logo />
+      <p class="mt-3 text-[var(--color-text-faint)] text-xs max-w-[240px] leading-relaxed">
+        Backups for the databases you actually run. No agents. No cloud.
+      </p>
+    </div>
+    <div>
+      <h4 class="text-[var(--color-text)] font-semibold mb-2 text-xs uppercase tracking-wider">Product</h4>
+      <ul class="space-y-1 text-[var(--color-text-muted)]">
+        <li><a href="/product" class="hover:text-[var(--color-text)]">Features</a></li>
+        <li><a href="/use-cases" class="hover:text-[var(--color-text)]">Use cases</a></li>
+        <li><a href="/download" class="hover:text-[var(--color-text)]">Download</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4 class="text-[var(--color-text)] font-semibold mb-2 text-xs uppercase tracking-wider">Company</h4>
+      <ul class="space-y-1 text-[var(--color-text-muted)]">
+        <li><a href="/about" class="hover:text-[var(--color-text)]">About</a></li>
+        <li><a href="mailto:hello@tunnex.app" class="hover:text-[var(--color-text)]">Contact</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4 class="text-[var(--color-text)] font-semibold mb-2 text-xs uppercase tracking-wider">Legal</h4>
+      <ul class="space-y-1 text-[var(--color-text-muted)]">
+        <li><a href="/about#privacy" class="hover:text-[var(--color-text)]">Privacy</a></li>
+        <li><a href="/about#license" class="hover:text-[var(--color-text)]">License</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-[var(--color-border)]/60">
+    <div class="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between text-xs text-[var(--color-text-faint)]">
+      <span>© {year} Tunnex. All rights reserved.</span>
+      <span class="font-mono">Made for developers who back up before they deploy.</span>
+    </div>
+  </div>
+</footer>

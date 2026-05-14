@@ -65,7 +65,7 @@
 
   // ---------- mock log bus ----------
   const logBuffer = [
-    { id: 'l1', ts: new Date(Date.now() - 5 * 60_000).toISOString(), level: 'info', component: 'app', message: 'dbManager started', details: { platform: 'web' } },
+    { id: 'l1', ts: new Date(Date.now() - 5 * 60_000).toISOString(), level: 'info', component: 'app', message: 'Tunnex started', details: { platform: 'web' } },
     { id: 'l2', ts: new Date(Date.now() - 4 * 60_000).toISOString(), level: 'info', component: 'connection', message: 'Connected to vmi3269642', details: { host: 'vmi3269642.contaboserver.net' } },
     { id: 'l3', ts: new Date(Date.now() - 3 * 60_000).toISOString(), level: 'warn', component: 'compose', message: 'docker-compose v1 fallback', details: { reason: 'docker compose version returned non-zero' } },
     { id: 'l4', ts: new Date(Date.now() - 2 * 60_000).toISOString(), level: 'error', component: 'backup', message: 'Backup failed: pg_dump exited with code 1', details: { stderr: 'connection to server failed: timeout' } },
@@ -108,7 +108,7 @@
   window.dbm = {
     ping: async () => ({
       ok: true,
-      runtime: { electron: 'browser', node: 'browser', platform: 'web', safeStorageAvailable: false },
+      runtime: { version: '0.0.0-dev', electron: 'browser', node: 'browser', platform: 'web', packaged: false, safeStorageAvailable: false },
     }),
 
     servers: {
@@ -376,6 +376,13 @@
         return samples[Math.floor(Math.random() * samples.length)];
       },
     },
+
+    // Auto-update no-ops in the browser dev-server — nothing to install.
+    updates: {
+      check: async () => ({ ok: true }),
+      installNow: async () => ({ ok: true }),
+      on: () => () => {},
+    },
   };
 
   document.body && document.body.setAttribute('data-dev-mock', '1');
@@ -383,5 +390,5 @@
     document.body.setAttribute('data-dev-mock', '1');
   });
 
-  console.info('[dbManager] dev mode — using mock window.dbm. Data is in-memory only and resets on reload.');
+  console.info('[Tunnex] dev mode — using mock window.dbm. Data is in-memory only and resets on reload.');
 })();

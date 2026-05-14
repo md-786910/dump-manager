@@ -34,11 +34,13 @@ const state = {
 (async function init() {
   try {
     state.runtime = await window.dbm.ping();
+    const rt = state.runtime.runtime;
+    if (rt.version) $('appVersion').textContent = 'v' + rt.version;
     $('runtime').textContent =
-      'electron ' + state.runtime.runtime.electron +
-      ' · node ' + state.runtime.runtime.node +
-      ' · ' + state.runtime.runtime.platform;
-    if (!state.runtime.runtime.safeStorageAvailable) {
+      'electron ' + rt.electron +
+      ' · node ' + rt.node +
+      ' · ' + rt.platform;
+    if (!rt.safeStorageAvailable) {
       $('statusLeft').textContent = 'OS keychain unavailable — encryption disabled';
     }
   } catch (err) {
@@ -49,6 +51,7 @@ const state = {
   window.dbm.backup.onProgress(onBackupProgress);
   window.dbm.discovery.onProgress(onDiscoveryProgress);
   window.dbm.logs.onEvent(onLogEvent);
+  initUpdater();
   installRendererErrorCapture();
   initLogsDrawer();
   // Seed the buffer with recent history so opening the drawer isn't empty.
@@ -360,12 +363,12 @@ function renderMainPanel() {
   if (!t) {
     $('mainEmpty').hidden = false;
     $('profileView').hidden = true;
-    $('appBarTitle').textContent = 'dbManager';
+    $('appBarTitle').textContent = 'Tunnex';
     return;
   }
   $('mainEmpty').hidden = true;
   $('profileView').hidden = false;
-  $('appBarTitle').textContent = 'dbManager — ' + t.name + ' [' + t.envTag + ']';
+  $('appBarTitle').textContent = 'Tunnex — ' + t.name + ' [' + t.envTag + ']';
 
   $('pvName').textContent = t.name;
   const tag = $('pvTag');
@@ -619,6 +622,7 @@ async function ensureConnected(serverId) {
   state.connections[serverId] = false;
   renderServerTree();
   flashStatus('Connect failed: ' + (res.error || 'unknown'));
+  await showDockerSetupHelp(res.code, res.error);
   return false;
 }
 
@@ -637,6 +641,7 @@ async function probeLocalServer(id) {
     state.connections[id] = false;
     renderServerTree();
     flashStatus('Probe failed: ' + (res.error || 'unknown'));
+    await showDockerSetupHelp(res.code, res.error);
   }
 }
 
@@ -653,6 +658,45 @@ function flashStatus(msg) {
   $('statusLeft').textContent = msg;
   if (statusFlashTimer) clearTimeout(statusFlashTimer);
   statusFlashTimer = setTimeout(() => { $('statusLeft').textContent = 'Idle'; }, 4000);
+}
+
+// Returns true if the error was recognized and a dialog was shown.
+// A packaged Electron app cannot prompt the user for a sudo password (no TTY,
+// and showing a per-command GUI prompt is poor UX). Instead, surface a clear
+// dialog with the one-time fix command for users to run in a terminal.
+async function showDockerSetupHelp(code, fallbackMessage) {
+  const fixCmd = 'sudo usermod -aG docker $USER';
+  const details = {
+    DOCKER_UNAVAILABLE: {
+      title: 'Docker is not accessible',
+      message: 'This app needs access to Docker without a password prompt.',
+      detail:
+        'Either Docker is not installed/running, or your user is not in the docker group.\n\n' +
+        'Fix (one-time):\n  ' + fixCmd + '\n\nThen log out and back in (or reboot) and try again.',
+    },
+    DOCKER_SUDO_PASSWORD_REQUIRED: {
+      title: 'Docker requires a password',
+      message: 'Docker is only reachable via sudo, but a GUI app cannot prompt for the password.',
+      detail:
+        'Recommended fix (one-time): add your user to the docker group so sudo is no longer needed.\n\n' +
+        '  ' + fixCmd + '\n\nThen log out and back in (or reboot).\n\n' +
+        'Alternative: configure passwordless sudo (NOPASSWD) for docker in /etc/sudoers.',
+    },
+  };
+  const info = details[code];
+  if (!info) return false;
+  const ans = await window.dbm.dialog.confirm({
+    title: info.title,
+    message: info.message,
+    detail: info.detail + (fallbackMessage ? '\n\n(' + fallbackMessage + ')' : ''),
+    confirmLabel: 'Copy fix command',
+    cancelLabel: 'Close',
+  });
+  if (ans.ok) {
+    try { await navigator.clipboard.writeText(fixCmd); flashStatus('Fix command copied to clipboard'); }
+    catch { flashStatus('Could not copy — run: ' + fixCmd); }
+  }
+  return true;
 }
 
 async function deleteServer(id) {
@@ -1396,7 +1440,11 @@ function onBackupProgress(ev) {
     b.phase = ev.phase;
     applyPhase(ev.phase);
     if (ev.phase === 'done') return finishOp(true, ev.meta);
-    if (ev.phase === 'error') return finishOp(false, null, ev.error);
+    if (ev.phase === 'error') {
+      finishOp(false, null, ev.error);
+      showDockerSetupHelp(ev.code, ev.error);
+      return;
+    }
     if (ev.phase === 'cancelled') return finishOp(false, null, 'Cancelled', 'cancelled');
     return;
   }
@@ -1573,6 +1621,7 @@ async function startDiscovery(serverId) {
     err.hidden = false;
     $('discoverPhase').textContent = 'Failed';
     $('discoverBar').style.width = '0';
+    await showDockerSetupHelp(res.code, res.error);
     return;
   }
   lastDiscoveryResult = res.result;
@@ -2124,4 +2173,54 @@ async function onRestoreConfirm() {
   }
   renderServerTree();
   await refreshAll();
+}
+
+// ---------- auto-update banner ----------
+
+function initUpdater() {
+  if (!window.dbm || !window.dbm.updates) return;
+  const banner = $('updateBanner');
+  const text = $('updateBannerText');
+  const bar = $('updateBannerBar');
+  const barInner = $('updateBannerBarInner');
+  const actions = $('updateBannerActions');
+  if (!banner) return;
+
+  function showDownloading(payload) {
+    banner.hidden = false;
+    banner.classList.remove('update-banner--error');
+    const pct = payload && typeof payload.percent === 'number' ? Math.round(payload.percent) : 0;
+    text.textContent = 'Downloading update… ' + pct + '%';
+    bar.hidden = false;
+    barInner.style.width = pct + '%';
+    actions.hidden = true;
+  }
+  function showReady(version) {
+    banner.hidden = false;
+    banner.classList.remove('update-banner--error');
+    text.textContent = 'Update ' + (version ? 'v' + version + ' ' : '') + 'ready to install.';
+    bar.hidden = true;
+    actions.hidden = false;
+  }
+  function showError(message) {
+    banner.hidden = false;
+    banner.classList.add('update-banner--error');
+    text.textContent = 'Update failed: ' + message;
+    bar.hidden = true;
+    actions.hidden = true;
+    setTimeout(() => {
+      if (banner.classList.contains('update-banner--error')) banner.hidden = true;
+    }, 10000);
+  }
+  function hide() { banner.hidden = true; }
+
+  window.dbm.updates.on('checking', () => { /* silent */ });
+  window.dbm.updates.on('available', (payload) => showDownloading({ percent: 0, ...(payload || {}) }));
+  window.dbm.updates.on('progress', showDownloading);
+  window.dbm.updates.on('ready', (payload) => showReady(payload && payload.version));
+  window.dbm.updates.on('none', () => { /* nothing to do */ });
+  window.dbm.updates.on('error', (payload) => showError(payload && payload.message || 'unknown error'));
+
+  $('updateRestartBtn').addEventListener('click', () => { window.dbm.updates.installNow(); });
+  $('updateDismissBtn').addEventListener('click', hide);
 }

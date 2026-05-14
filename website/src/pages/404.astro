@@ -1,0 +1,18 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base title="404 — Tunnex" description="That page doesn't exist.">
+  <section class="hero-bg">
+    <div class="max-w-2xl mx-auto px-5 py-32 text-center">
+      <p class="text-[var(--color-accent)] uppercase tracking-wider text-xs font-mono font-semibold mb-3">404</p>
+      <h1 class="text-4xl sm:text-5xl font-semibold tracking-tight mb-4">Page not found</h1>
+      <p class="text-[var(--color-text-muted)] mb-8">
+        Whatever you were looking for, it isn't here. Try the homepage or a download.
+      </p>
+      <div class="flex items-center justify-center gap-3 flex-wrap">
+        <a href="/" class="px-4 py-2 rounded-md bg-[var(--color-accent)] text-white font-medium hover:bg-[var(--color-accent)]/90">Home</a>
+        <a href="/download" class="px-4 py-2 rounded-md border border-[var(--color-border)] hover:bg-[var(--color-bg-2)]">Download</a>
+      </div>
+    </div>
+  </section>
+</Base>

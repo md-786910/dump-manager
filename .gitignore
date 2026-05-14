@@ -1,7 +1,24 @@
 node_modules
 .env
+.env.local
 dist
 coverage
 release
 *.log
 aa.zip
+
+# packaged artifacts
+*.dmg
+*.AppImage
+*.deb
+*.exe
+*.blockmap
+
+# intermediate icon outputs from electron-icon-builder
+build/icons/
+build/icon-*.png
+
+# marketing site
+website/node_modules
+website/dist
+website/.astro

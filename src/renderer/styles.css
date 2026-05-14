@@ -1,4 +1,4 @@
-/* dbManager — design tokens + base layout
+/* Tunnex — design tokens + base layout
    Visual language: near-monochrome neutrals, single blue accent, red reserved for destructive.
    Density: 8px grid, compact-comfortable. Type: Inter + JetBrains Mono fallbacks. */
 
@@ -74,7 +74,7 @@ body {
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   display: grid;
-  grid-template-rows: 36px 1fr auto 26px;
+  grid-template-rows: 36px 1fr auto auto 26px;
   user-select: none;
 }
 
@@ -86,6 +86,12 @@ body {
   padding: 0 12px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
+}
+.app-bar__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
 }
 .app-bar__title {
   font-size: var(--fs-secondary);
@@ -255,6 +261,49 @@ body {
   text-align: center;
 }
 .status-bar__badge--error { background: var(--danger); color: var(--danger-fg); }
+.status-bar__version {
+  color: var(--text-faint);
+  font-size: var(--fs-meta);
+  padding: 0 8px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  margin: 0 2px;
+}
+.status-bar__version:empty { display: none; }
+
+/* Update banner — sits just above the status bar; non-blocking. */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  font-size: var(--fs-meta);
+  color: var(--text);
+  background: var(--bg-elev-1);
+  border-top: 1px solid var(--border);
+}
+.update-banner[hidden] { display: none; }
+.update-banner--error { color: var(--danger); }
+.update-banner__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+}
+.update-banner__text { flex: 1; min-width: 0; }
+.update-banner__bar {
+  width: 120px;
+  height: 4px;
+  background: var(--bg-elev-3);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.update-banner__bar-inner {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width var(--t-fast);
+}
+.update-banner__actions { display: inline-flex; gap: 4px; }
 
 /* Logs drawer */
 .logs-drawer {

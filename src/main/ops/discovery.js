@@ -13,40 +13,24 @@
 // Returns a structured tree the renderer can render directly. All commands
 // route through `pg.shQuote` for safety. `sudoForDocker` is honored.
 
-const sshClient = require('../ssh/client');
+const channel = require('../exec/channel');
+const runCommand = require('../exec/runCommand');
 const pg = require('../db/postgres');
 
-// Run a shell command via SSH and collect stdout/stderr/exit.
-function runCommand(client, command) {
-  return new Promise((resolve, reject) => {
-    client.exec(command, { pty: false }, (err, stream) => {
-      if (err) return reject(err);
-      let stdout = '';
-      let stderr = '';
-      let exitCode = null;
-      stream.on('data', (c) => { stdout += c.toString('utf8'); });
-      stream.stderr.on('data', (c) => { stderr += c.toString('utf8'); });
-      stream.on('exit', (code) => { exitCode = code; });
-      stream.on('close', () => resolve({ stdout, stderr, exitCode }));
-      stream.on('error', reject);
-    });
-  });
-}
-
-async function probeComposeBin(client, { sudo }) {
+async function probeComposeBin(ch, { sudo }) {
   // Try v2.
-  const v2 = await runCommand(client, (sudo ? 'sudo ' : '') + 'docker compose version --short 2>/dev/null');
+  const v2 = await runCommand(ch, (sudo ? 'sudo ' : '') + 'docker compose version --short 2>/dev/null');
   if (v2.exitCode === 0 && v2.stdout.trim()) {
     return { composeBin: 'docker compose', version: v2.stdout.trim() };
   }
   // Try v1.
-  const v1 = await runCommand(client, (sudo ? 'sudo ' : '') + 'docker-compose --version 2>/dev/null');
+  const v1 = await runCommand(ch, (sudo ? 'sudo ' : '') + 'docker-compose --version 2>/dev/null');
   if (v1.exitCode === 0 && v1.stdout.trim()) {
     return { composeBin: 'docker-compose', version: v1.stdout.trim() };
   }
   throw new Error(
-    'No docker compose found on the server (tried `docker compose version` and `docker-compose --version`).' +
-    (sudo ? '' : ' If docker requires sudo on this server, enable the sudo toggle on the Server.')
+    'No docker compose found (tried `docker compose version` and `docker-compose --version`).' +
+    (sudo ? '' : ' If docker requires sudo here, enable the sudo toggle on the Server.')
   );
 }
 
@@ -62,24 +46,18 @@ async function run(opts) {
   const emit = (phase, message) => { if (onProgress) onProgress({ phase, message }); };
 
   emit('connecting');
-  const client = await sshClient.connect({
-    host: server.host,
-    port: server.port,
-    username: server.user,
-    privateKey,
-    passphrase,
-    knownHosts,
-    onUntrustedHost,
+  const ch = await channel.connect(server, {
+    privateKey, passphrase, knownHosts, onUntrustedHost,
   });
 
   try {
     emit('probing-docker');
     const sudo = !!server.sudoForDocker;
-    const dialect = await probeComposeBin(client, { sudo });
+    const dialect = await probeComposeBin(ch, { sudo });
 
     emit('listing-projects');
     const lsCmd = pg.composeListCommand({ composeBin: dialect.composeBin, sudo });
-    const ls = await runCommand(client, lsCmd);
+    const ls = await runCommand(ch, lsCmd);
     if (ls.exitCode !== 0) {
       throw new Error('docker compose ls failed: ' + (ls.stderr || 'no output').trim());
     }
@@ -98,7 +76,7 @@ async function run(opts) {
       const cfgCmd = pg.composeConfigServicesCommand({
         composeBin: dialect.composeBin, sudo, projectName: row.name, composeProjectPath,
       });
-      const cfg = await runCommand(client, cfgCmd);
+      const cfg = await runCommand(ch, cfgCmd);
       if (cfg.exitCode !== 0) {
         // Skip with a note rather than abort the whole discovery — one bad
         // project shouldn't ruin the others.
@@ -123,7 +101,7 @@ async function run(opts) {
           composeBin: dialect.composeBin, sudo, projectName: row.name, composeProjectPath,
           service: svc.name, varName: 'POSTGRES_USER',
         });
-        const envRes = await runCommand(client, envCmd);
+        const envRes = await runCommand(ch, envCmd);
         const pgUser = (envRes.stdout || '').trim() || 'postgres';
 
         // List databases.
@@ -131,7 +109,7 @@ async function run(opts) {
           composeBin: dialect.composeBin, sudo, projectName: row.name, composeProjectPath,
           service: svc.name, pgUser,
         });
-        const psql = await runCommand(client, psqlCmd);
+        const psql = await runCommand(ch, psqlCmd);
         let databases = [];
         let svcError = null;
         if (psql.exitCode === 0) {
@@ -165,7 +143,7 @@ async function run(opts) {
       projects,
     };
   } finally {
-    try { client.end(); } catch {}
+    try { ch.end(); } catch {}
   }
 }
 
@@ -173,22 +151,16 @@ async function run(opts) {
 // their services, without the per-DB `psql -lqt` round-trip. Fast enough to
 // fire on every Target-modal open.
 async function listProjects({ server, privateKey, passphrase, knownHosts, onUntrustedHost }) {
-  const client = await sshClient.connect({
-    host: server.host,
-    port: server.port,
-    username: server.user,
-    privateKey,
-    passphrase,
-    knownHosts,
-    onUntrustedHost,
+  const ch = await channel.connect(server, {
+    privateKey, passphrase, knownHosts, onUntrustedHost,
   });
 
   try {
     const sudo = !!server.sudoForDocker;
-    const dialect = await probeComposeBin(client, { sudo });
+    const dialect = await probeComposeBin(ch, { sudo });
 
     const lsCmd = pg.composeListCommand({ composeBin: dialect.composeBin, sudo });
-    const ls = await runCommand(client, lsCmd);
+    const ls = await runCommand(ch, lsCmd);
     if (ls.exitCode !== 0) {
       throw new Error('docker compose ls failed: ' + (ls.stderr || 'no output').trim());
     }
@@ -202,7 +174,7 @@ async function listProjects({ server, privateKey, passphrase, knownHosts, onUntr
       const cfgCmd = pg.composeConfigServicesCommand({
         composeBin: dialect.composeBin, sudo, projectName: row.name, composeProjectPath,
       });
-      const cfg = await runCommand(client, cfgCmd);
+      const cfg = await runCommand(ch, cfgCmd);
 
       let services = [];
       if (cfg.exitCode === 0) {
@@ -232,7 +204,7 @@ async function listProjects({ server, privateKey, passphrase, knownHosts, onUntr
       projects,
     };
   } finally {
-    try { client.end(); } catch {}
+    try { ch.end(); } catch {}
   }
 }
 

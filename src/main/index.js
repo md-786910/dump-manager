@@ -18,6 +18,7 @@ const ipcDiscovery = require('./ipc/discovery');
 const ipcDialog = require('./ipc/dialog');
 const ipcDumps = require('./ipc/dumps');
 const ipcLogs = require('./ipc/logs');
+const ipcDbViewer = require('./ipc/dbViewer');
 const logging = require('./logging');
 
 const isDev = !app.isPackaged;
@@ -93,6 +94,16 @@ app.whenReady().then(() => {
   const targets = targetsStore.buildApi(app, safeStorage);
   const knownHosts = knownHostsStore.buildApi(app);
 
+  // Stamp `kind: 'ssh'` onto any legacy server record that predates the
+  // local-vs-ssh split. Idempotent — re-running is a no-op.
+  try {
+    for (const s of servers.list()) {
+      if (!s.kind) servers.update(s.id, { kind: 'ssh' });
+    }
+  } catch (err) {
+    logging.error('migrate', 'kind backfill failed: ' + err.message);
+  }
+
   passphraseCache.attach(app);
 
   ipcMain.handle('app:ping', () => ({
@@ -112,6 +123,7 @@ app.whenReady().then(() => {
   ipcDialog.register();
   ipcDumps.register({ app, keychain });
   ipcLogs.register();
+  ipcDbViewer.register({ servers, targets, knownHosts, passphraseCache });
 
   createMainWindow();
   app.on('activate', () => {

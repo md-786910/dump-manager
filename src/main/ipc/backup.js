@@ -50,10 +50,14 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
     let target, server;
     try {
       target = targets._getDecrypted(targetId);
-      if (target.kind !== 'docker-compose-vps') {
-        throw new Error('Only docker-compose-vps backups are wired up in MVP. URI support coming next.');
+      if (target.kind === 'docker-compose-vps') {
+        server = servers.get(target.serverId);
+      } else if (target.kind === 'external-uri') {
+        // No server for external-uri targets; the channel runs locally.
+        server = null;
+      } else {
+        throw new Error('unsupported target.kind: ' + target.kind);
       }
-      server = servers.get(target.serverId);
     } catch (err) {
       abortByOp.delete(opId);
       send('backup:progress', { opId, phase: 'error', error: err.message });
@@ -63,30 +67,35 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
 
     const cl = target.vps && target.vps.compressionLevel;
     logging.info('backup', 'Starting backup of "' + target.name + '"', {
-      targetId: target.id, serverId: server.id, server: server.name,
+      targetId: target.id, serverId: server ? server.id : null,
+      server: server ? server.name : '(local URI)',
       dbName: target.dbName, service: target.vps && target.vps.service,
       compressionLevel: cl == null ? '1 (default — fast)' : cl,
     });
 
-    // Per-server queueing.
-    const prev = inFlightByServer.get(server.id);
+    // Per-server queueing — external-uri targets don't have a server, so they
+    // use a synthetic key based on the target so we don't try to dump the
+    // same DB twice concurrently.
+    const queueKey = server ? server.id : 'uri:' + target.id;
+    const prev = inFlightByServer.get(queueKey);
     if (prev) {
       send('backup:progress', { opId, phase: 'queued' });
-      logging.info('backup', 'Queued behind another backup on ' + server.name);
+      logging.info('backup', 'Queued behind another backup on ' + (server ? server.name : target.name));
       try { await prev; } catch { /* ignore the previous op's outcome */ }
     }
 
     const exec = (async () => {
       try {
-        const privateKey = sshClient.loadPrivateKey(server.privateKeyPath);
+        const privateKey = server && server.kind === 'ssh' ? sshClient.loadPrivateKey(server.privateKeyPath) : null;
         const dumpKey = keychain.ensure(app);
 
-        const effectivePass = passphrase || passphraseCache.get(server.id) || '';
+        const effectivePass = passphrase || (server ? passphraseCache.get(server.id) : '') || '';
 
         send('backup:progress', { opId, phase: 'connecting' });
 
         const meta = await backupVps.run({
           server,
+          uri: target.kind === 'external-uri' ? target.uri : undefined,
           target,
           privateKey,
           passphrase: effectivePass || undefined,
@@ -131,12 +140,12 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
 
         // Cache the passphrase on success — only if the caller actually supplied
         // one. (If we used a cached value, it's already there.)
-        if (passphrase) passphraseCache.set(server.id, passphrase);
+        if (passphrase && server) passphraseCache.set(server.id, passphrase);
 
         audit.append(app, {
           op: 'backup',
-          serverId: server.id,
-          serverName: server.name,
+          serverId: server ? server.id : null,
+          serverName: server ? server.name : null,
           targetId: target.id,
           profileId: target.id, // legacy field
           profileName: target.name,
@@ -182,11 +191,11 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
       }
     })();
 
-    inFlightByServer.set(server.id, exec);
+    inFlightByServer.set(queueKey, exec);
     try {
       return await exec;
     } finally {
-      if (inFlightByServer.get(server.id) === exec) inFlightByServer.delete(server.id);
+      if (inFlightByServer.get(queueKey) === exec) inFlightByServer.delete(queueKey);
       abortByOp.delete(opId);
     }
   });
@@ -204,7 +213,7 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
     return { ok: true };
   });
 
-  ipcMain.handle('restore:start', async (event, { dumpPath, targetId, cleanFirst, passphrase }) => {
+  ipcMain.handle('restore:start', async (event, { dumpPath, targetId, cleanFirst, passphrase, dbNameOverride }) => {
     const opId = 'op-' + crypto.randomUUID();
     const win = BrowserWindow.fromWebContents(event.sender);
     const send = (channel, payload) => { try { win && win.webContents.send(channel, payload); } catch {} };
@@ -225,10 +234,13 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
         resolvedTargetId = meta.sourceProfileId || meta.targetId;
       }
       target = targets._getDecrypted(resolvedTargetId);
-      if (target.kind !== 'docker-compose-vps') {
-        throw new Error('Only docker-compose-vps restores are wired up in MVP.');
+      if (target.kind === 'docker-compose-vps') {
+        server = servers.get(target.serverId);
+      } else if (target.kind === 'external-uri') {
+        server = null;
+      } else {
+        throw new Error('unsupported target.kind: ' + target.kind);
       }
-      server = servers.get(target.serverId);
     } catch (err) {
       abortByOp.delete(opId);
       send('backup:progress', { opId, phase: 'error', error: err.message });
@@ -237,28 +249,31 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
     }
 
     logging.info('restore', 'Starting restore of "' + target.name + '"', {
-      targetId: target.id, serverId: server.id, server: server.name,
+      targetId: target.id, serverId: server ? server.id : null,
+      server: server ? server.name : '(local URI)',
       dbName: target.dbName, dumpPath, cleanFirst: !!cleanFirst,
     });
 
-    const prev = inFlightByServer.get(server.id);
+    const queueKey = server ? server.id : 'uri:' + target.id;
+    const prev = inFlightByServer.get(queueKey);
     if (prev) {
       send('backup:progress', { opId, phase: 'queued' });
-      logging.info('restore', 'Queued behind another op on ' + server.name);
+      logging.info('restore', 'Queued behind another op on ' + (server ? server.name : target.name));
       try { await prev; } catch { /* ignore */ }
     }
 
     const exec = (async () => {
       try {
-        const privateKey = sshClient.loadPrivateKey(server.privateKeyPath);
+        const privateKey = server && server.kind === 'ssh' ? sshClient.loadPrivateKey(server.privateKeyPath) : null;
         const dumpKey = keychain.ensure(app);
-        const effectivePass = passphrase || passphraseCache.get(server.id) || '';
+        const effectivePass = passphrase || (server ? passphraseCache.get(server.id) : '') || '';
 
         send('backup:progress', { opId, phase: 'connecting' });
 
         const meta = await restoreVps.run({
           server, target,
-          dumpPath, cleanFirst: !!cleanFirst,
+          uri: target.kind === 'external-uri' ? target.uri : undefined,
+          dumpPath, cleanFirst: !!cleanFirst, dbNameOverride: dbNameOverride || null,
           privateKey,
           passphrase: effectivePass || undefined,
           dumpKey,
@@ -289,11 +304,11 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
           },
         });
 
-        if (passphrase) passphraseCache.set(server.id, passphrase);
+        if (passphrase && server) passphraseCache.set(server.id, passphrase);
 
         audit.append(app, {
           op: 'restore',
-          serverId: server.id, serverName: server.name,
+          serverId: server ? server.id : null, serverName: server ? server.name : null,
           targetId: target.id, profileId: target.id, profileName: target.name,
           envTag: target.envTag, dbName: target.dbName,
           ok: true, durationMs: Date.now() - startedAt,
@@ -324,11 +339,11 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
       }
     })();
 
-    inFlightByServer.set(server.id, exec);
+    inFlightByServer.set(queueKey, exec);
     try {
       return await exec;
     } finally {
-      if (inFlightByServer.get(server.id) === exec) inFlightByServer.delete(server.id);
+      if (inFlightByServer.get(queueKey) === exec) inFlightByServer.delete(queueKey);
       abortByOp.delete(opId);
     }
   });

@@ -4,6 +4,7 @@ const { ipcMain, BrowserWindow, dialog } = require('electron');
 
 const sshClient = require('../ssh/client');
 const testConnection = require('../ops/testConnection');
+const channel = require('../exec/channel');
 const logging = require('../logging');
 
 function register({ servers, targets, knownHosts, passphraseCache, audit, app }) {
@@ -25,6 +26,38 @@ function register({ servers, targets, knownHosts, passphraseCache, audit, app })
     let server;
     try { server = servers.get(serverId); }
     catch (err) { return { ok: false, error: err.message }; }
+
+    // Local server probe: just run `docker compose version` (with sudo if
+    // configured), no SSH, no passphrase prompt.
+    if (server.kind === 'local') {
+      try {
+        const ch = await channel.connect(server);
+        const stream = await ch.exec((server.sudoForDocker ? 'sudo ' : '') + 'docker compose version --short 2>/dev/null || docker-compose --version 2>/dev/null');
+        const result = await new Promise((resolve, reject) => {
+          let stdout = '', exitCode = null;
+          stream.on('data', (c) => { stdout += c.toString('utf8'); });
+          stream.on('exit', (code) => { exitCode = code; });
+          stream.on('close', () => resolve({ stdout, exitCode }));
+          stream.on('error', reject);
+        });
+        if (result.exitCode !== 0 || !result.stdout.trim()) {
+          throw new Error('No docker compose found on this machine. Install Docker Desktop or docker-compose, or enable the sudo toggle.');
+        }
+        audit.append(app, {
+          op: 'connect', serverId, serverName: server.name,
+          ok: true, durationMs: Date.now() - startedAt,
+        });
+        logging.info('connection', 'Local docker reachable for ' + server.name, { version: result.stdout.trim() });
+        return { ok: true, local: true, dockerComposeVersion: result.stdout.trim() };
+      } catch (err) {
+        audit.append(app, {
+          op: 'connect', serverId, serverName: server.name,
+          ok: false, error: err.message, durationMs: Date.now() - startedAt,
+        });
+        logging.warn('connection', 'Local probe failed for ' + server.name + ': ' + err.message);
+        return { ok: false, error: err.message };
+      }
+    }
 
     try {
       const effectivePass = passphrase || passphraseCache.get(serverId) || '';

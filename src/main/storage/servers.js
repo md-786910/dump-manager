@@ -26,12 +26,19 @@ function writeAll(app, records) {
   fs.renameSync(tmp, f);
 }
 
+const KINDS = new Set(['ssh', 'local']);
+
 function validate(input) {
   if (!input || typeof input !== 'object') throw new Error('server required');
   if (!input.name) throw new Error('server.name required');
-  if (!input.host) throw new Error('server.host required');
-  if (!input.user) throw new Error('server.user required');
-  if (!input.privateKeyPath) throw new Error('server.privateKeyPath required');
+  const kind = input.kind || 'ssh';
+  if (!KINDS.has(kind)) throw new Error('server.kind must be ssh|local');
+  if (kind === 'ssh') {
+    if (!input.host) throw new Error('server.host required');
+    if (!input.user) throw new Error('server.user required');
+    if (!input.privateKeyPath) throw new Error('server.privateKeyPath required');
+  }
+  // Local servers only need a name; SSH fields are ignored.
 }
 
 function buildApi(app) {
@@ -49,13 +56,16 @@ function buildApi(app) {
       validate(input);
       const all = readAll(app);
       const now = new Date().toISOString();
+      const kind = input.kind || 'ssh';
       const rec = {
         id: crypto.randomUUID(),
+        kind,
         name: input.name,
-        host: input.host,
-        port: Number(input.port) || 22,
-        user: input.user,
-        privateKeyPath: input.privateKeyPath,
+        host: kind === 'ssh' ? input.host : null,
+        port: kind === 'ssh' ? (Number(input.port) || 22) : null,
+        user: kind === 'ssh' ? input.user : null,
+        privateKeyPath: kind === 'ssh' ? input.privateKeyPath : null,
+        wslDistro: kind === 'local' ? (input.wslDistro || null) : null,
         sudoForDocker: !!input.sudoForDocker,
         composeBin: input.composeBin || null, // populated after discovery probes dialect
         notes: input.notes || null,
@@ -72,8 +82,15 @@ function buildApi(app) {
       const idx = all.findIndex((s) => s.id === id);
       if (idx < 0) throw new Error('server not found: ' + id);
       const merged = { ...all[idx], ...patch, id: all[idx].id, updatedAt: new Date().toISOString() };
+      // Legacy records may lack `kind` — default to ssh for validation.
+      if (!merged.kind) merged.kind = 'ssh';
       validate(merged);
-      merged.port = Number(merged.port) || 22;
+      if (merged.kind === 'ssh') {
+        merged.port = Number(merged.port) || 22;
+        merged.wslDistro = null;
+      } else if (merged.kind === 'local') {
+        merged.wslDistro = merged.wslDistro || null;
+      }
       merged.sudoForDocker = !!merged.sudoForDocker;
       all[idx] = merged;
       writeAll(app, all);

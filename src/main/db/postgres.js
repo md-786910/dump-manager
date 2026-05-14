@@ -55,6 +55,19 @@ function vpsDumpCommand(opts) {
     + ' pg_dump -Fc --verbose -Z ' + cl + userFlag + ' -d ' + shQuote(opts.dbName);
 }
 
+// External-URI variants. The URI is passed via env (PGURI) rather than as a
+// shell argument so it never appears in process listings or shell history.
+// Caller is responsible for setting env.PGURI on the spawn() call.
+function uriDumpCommand(opts) {
+  const cl = normalizeCompressionLevel(opts.compressionLevel);
+  return 'pg_dump -Fc --verbose -Z ' + cl + ' -d "$PGURI"';
+}
+
+function uriRestoreCommand(opts) {
+  const cleanFlag = opts.cleanFirst ? ' --clean --if-exists' : '';
+  return 'pg_restore' + cleanFlag + ' -d "$PGURI"';
+}
+
 function vpsRestoreCommand(opts) {
   const cd = opts.composeProjectPath ? 'cd ' + shQuote(opts.composeProjectPath) + ' && ' : '';
   const pre = composePrefix(opts);
@@ -102,6 +115,52 @@ function psqlListDbsCommand({ composeBin, sudo, projectName, composeProjectPath,
     + ' psql -U ' + shQuote(pgUser || 'postgres')
     + " -At -F '|' -c "
     + shQuote("SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname");
+}
+
+// Double-quote a Postgres identifier (schema/table name) safely.
+function pgIdent(s) {
+  return '"' + String(s).replace(/"/g, '""') + '"';
+}
+
+// --- View DB helpers ---
+
+const LIST_TABLES_SQL =
+  "SELECT n.nspname, c.relname, c.reltuples::bigint, pg_size_pretty(pg_total_relation_size(c.oid)) " +
+  "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
+  "WHERE c.relkind = 'r' AND n.nspname NOT IN ('pg_catalog','information_schema','pg_toast') " +
+  "ORDER BY n.nspname, c.relname";
+
+// List all user tables with approx row count + total size.
+// For docker-compose-vps targets (runs psql inside the container).
+function psqlListTablesCommand({ composeBin, sudo, projectName, composeProjectPath, service, pgUser, dbName }) {
+  const cd = composeProjectPath ? 'cd ' + shQuote(composeProjectPath) + ' && ' : '';
+  return cd + composePrefix({ composeBin, projectName, sudo })
+    + ' exec -T ' + shQuote(service)
+    + ' psql -U ' + shQuote(pgUser || 'postgres')
+    + ' -d ' + shQuote(dbName)
+    + " -At -F '|' -c " + shQuote(LIST_TABLES_SQL);
+}
+
+// Fetch a page of rows from a specific table (--csv output).
+// LIMIT 51 so caller can detect hasMore = rows > 50.
+function psqlQueryTableCommand({ composeBin, sudo, projectName, composeProjectPath, service, pgUser, dbName, schema, table, offset }) {
+  const cd = composeProjectPath ? 'cd ' + shQuote(composeProjectPath) + ' && ' : '';
+  const sql = 'SELECT * FROM ' + pgIdent(schema) + '.' + pgIdent(table) + ' LIMIT 51 OFFSET ' + (offset | 0);
+  return cd + composePrefix({ composeBin, projectName, sudo })
+    + ' exec -T ' + shQuote(service)
+    + ' psql -U ' + shQuote(pgUser || 'postgres')
+    + ' -d ' + shQuote(dbName)
+    + ' --csv -c ' + shQuote(sql);
+}
+
+// For external-uri targets (psql runs locally with PGURI env var).
+function psqlUriListTablesCommand() {
+  return "psql -At -F '|' \"$PGURI\" -c " + shQuote(LIST_TABLES_SQL);
+}
+
+function psqlUriQueryTableCommand({ schema, table, offset }) {
+  const sql = 'SELECT * FROM ' + pgIdent(schema) + '.' + pgIdent(table) + ' LIMIT 51 OFFSET ' + (offset | 0);
+  return 'psql --csv "$PGURI" -c ' + shQuote(sql);
 }
 
 // --- Parsers ---
@@ -160,23 +219,83 @@ function parsePsqlDbList(text) {
   return text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
 }
 
+// Parse pipe-delimited table list output: schema|table|approxRows|totalSize per line.
+function parsePsqlTableList(text) {
+  return text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).map((line) => {
+    const parts = line.split('|');
+    return {
+      schema: parts[0] || '',
+      table: parts[1] || '',
+      approxRows: parseInt(parts[2], 10) || 0,
+      totalSize: parts[3] || '',
+    };
+  });
+}
+
+// Parse psql --csv output. First line is header. Returns { columns, rows }.
+// Handles quoted fields and commas inside quoted values.
+function parsePsqlCsv(text) {
+  const lines = text.split(/\r?\n/);
+  // Remove trailing blank lines
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  if (!lines.length) return { columns: [], rows: [] };
+
+  const parseRow = (line) => {
+    const fields = [];
+    let i = 0;
+    while (i < line.length) {
+      if (line[i] === '"') {
+        // Quoted field
+        let val = '';
+        i++; // skip opening quote
+        while (i < line.length) {
+          if (line[i] === '"' && line[i + 1] === '"') { val += '"'; i += 2; }
+          else if (line[i] === '"') { i++; break; }
+          else { val += line[i++]; }
+        }
+        fields.push(val);
+        if (line[i] === ',') i++;
+      } else {
+        const end = line.indexOf(',', i);
+        if (end === -1) { fields.push(line.slice(i)); break; }
+        fields.push(line.slice(i, end));
+        i = end + 1;
+      }
+    }
+    return fields;
+  };
+
+  const columns = parseRow(lines[0]);
+  const rows = lines.slice(1).map(parseRow);
+  return { columns, rows };
+}
+
 module.exports = {
   DEFAULT_COMPRESSION_LEVEL,
   normalizeCompressionLevel,
   shQuote,
+  pgIdent,
   composePrefix,
   vpsDumpCommand,
   vpsRestoreCommand,
+  uriDumpCommand,
+  uriRestoreCommand,
   composeContainerStatusCommand,
   detectComposeBinCommand,
   composeListCommand,
   composeConfigServicesCommand,
   printenvCommand,
   psqlListDbsCommand,
+  psqlListTablesCommand,
+  psqlQueryTableCommand,
+  psqlUriListTablesCommand,
+  psqlUriQueryTableCommand,
   parseListing,
   parseComposeLs,
   parseComposeConfig,
   isPostgresImage,
   isMongoImage,
   parsePsqlDbList,
+  parsePsqlTableList,
+  parsePsqlCsv,
 };

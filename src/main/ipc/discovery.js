@@ -24,8 +24,10 @@ function register({ servers, knownHosts, passphraseCache, audit, app }) {
     logging.info('discovery', 'Discovering compose projects on ' + server.name, { serverId });
 
     try {
-      const effectivePass = passphrase || passphraseCache.get(serverId) || '';
-      const privateKey = sshClient.loadPrivateKey(server.privateKeyPath);
+      // For local servers there's no SSH key or passphrase to load.
+      const isLocal = server.kind === 'local';
+      const effectivePass = isLocal ? undefined : (passphrase || passphraseCache.get(serverId) || '');
+      const privateKey = isLocal ? null : sshClient.loadPrivateKey(server.privateKeyPath);
 
       const result = await discovery.run({
         server,
@@ -49,7 +51,7 @@ function register({ servers, knownHosts, passphraseCache, audit, app }) {
       });
 
       // Cache the passphrase only if discovery succeeded and one was provided.
-      if (passphrase) passphraseCache.set(serverId, passphrase);
+      if (passphrase && !isLocal) passphraseCache.set(serverId, passphrase);
 
       // Persist the detected composeBin on the Server for the next run.
       if (server.composeBin !== result.composeBin) {
@@ -96,8 +98,9 @@ function register({ servers, knownHosts, passphraseCache, audit, app }) {
     catch (err) { return { ok: false, error: err.message }; }
 
     try {
-      const effectivePass = passphrase || passphraseCache.get(serverId) || '';
-      const privateKey = sshClient.loadPrivateKey(server.privateKeyPath);
+      const isLocal = server.kind === 'local';
+      const effectivePass = isLocal ? undefined : (passphrase || passphraseCache.get(serverId) || '');
+      const privateKey = isLocal ? null : sshClient.loadPrivateKey(server.privateKeyPath);
 
       const result = await discovery.listProjects({
         server,
@@ -119,7 +122,7 @@ function register({ servers, knownHosts, passphraseCache, audit, app }) {
         },
       });
 
-      if (passphrase) passphraseCache.set(serverId, passphrase);
+      if (passphrase && !isLocal) passphraseCache.set(serverId, passphrase);
       if (server.composeBin !== result.composeBin) {
         servers.update(serverId, { composeBin: result.composeBin });
       }

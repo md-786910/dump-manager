@@ -16,8 +16,9 @@ const INVOKE_CHANNELS = new Set([
   'connection:test', 'connection:disconnect', 'connection:status', 'connection:statusAll',
   'compose:listProjects',
   'logs:tail', 'logs:append',
-  'dialog:pickKeyFile', 'dialog:confirm',
+  'dialog:pickKeyFile', 'dialog:confirm', 'wsl:listDistros',
   'settings:get', 'settings:ensureDumpsDir', 'settings:pickDumpsDir',
+  'db:listTables', 'db:queryTable', 'db:listDatabases',
 ]);
 
 const RECV_CHANNELS = new Set([
@@ -103,5 +104,14 @@ contextBridge.exposeInMainWorld('dbm', {
   dialog: {
     pickKeyFile: () => invoke('dialog:pickKeyFile'),
     confirm: (opts) => invoke('dialog:confirm', opts || {}),
+  },
+  wsl: {
+    listDistros: () => invoke('wsl:listDistros'),
+  },
+  db: {
+    listTables: (targetId, passphrase) => invoke('db:listTables', { targetId, passphrase }),
+    queryTable: (targetId, schema, table, offset, passphrase) =>
+      invoke('db:queryTable', { targetId, schema, table, offset, passphrase }),
+    listDatabases: (targetId, passphrase) => invoke('db:listDatabases', { targetId, passphrase }),
   },
 });

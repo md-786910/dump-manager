@@ -70,6 +70,10 @@ const state = {
   });
   $('btnDeleteTarget').addEventListener('click', onDeleteTarget);
   $('btnBackupNow').addEventListener('click', onBackupNow);
+  $('btnViewDb').addEventListener('click', onViewDb);
+  $('viewDbModalClose').addEventListener('click', closeViewDbModal);
+  $('viewDbPrev').addEventListener('click', () => viewDbChangePage(-1));
+  $('viewDbNext').addEventListener('click', () => viewDbChangePage(1));
   $('opCancelBtn').addEventListener('click', onCancelBackup);
   $('opDismissBtn').addEventListener('click', dismissOpPanel);
 
@@ -115,6 +119,8 @@ const state = {
   $('restoreModalClose').addEventListener('click', closeRestoreModal);
   $('restoreModalCancel').addEventListener('click', closeRestoreModal);
   $('restoreModalConfirm').addEventListener('click', onRestoreConfirm);
+  $('restoreTargetPicker').addEventListener('change', onRestoreTargetChange);
+  $('restoreDbPicker').addEventListener('change', onRestoreDbChange);
 
   // Dump list — delegated click handler.
   $('dumpList').addEventListener('click', onDumpListClick);
@@ -190,21 +196,50 @@ function renderServerTree() {
     const targets = byServer.get(server.id) || [];
     const collapsed = state.collapsedServers.has(server.id);
     const caret = collapsed ? '▸' : '▾';
+    const isLocal = server.kind === 'local';
     const connected = !!state.connections[server.id];
-    const statusClass = connected ? ' tree__status--on' : '';
-    const connectBtn = connected
-      ? '<button class="iconbtn iconbtn--xs" data-action="disconnect" title="Disconnect">' +
-          '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>' +
+
+    // Icon: monitor for local, server-rack for VPS
+    const iconClass = isLocal ? 'tree__server-icon--local' : (connected ? 'tree__server-icon--ssh tree__server-icon--on' : 'tree__server-icon--ssh');
+    const icon = isLocal
+      ? '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="2" width="14" height="10" rx="1.5"/><path d="M5 15h6M8 12v3"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="2" width="14" height="4" rx="1"/><rect x="1" y="9" width="14" height="4" rx="1"/><circle cx="13" cy="4" r="0.8" fill="currentColor" stroke="none"/><circle cx="13" cy="11" r="0.8" fill="currentColor" stroke="none"/></svg>';
+
+    // Subtitle: host info or local description
+    const subtitle = isLocal
+      ? (server.wslDistro ? 'WSL · ' + server.wslDistro : 'Docker · localhost')
+      : ((server.user || 'user') + '@' + (server.host || '?') + (server.port && server.port !== 22 ? ':' + server.port : ''));
+    const subClass = isLocal ? 'tree__server-sub--local' : (connected ? 'tree__server-sub--on' : '');
+
+    // Status badge pill
+    const badge = isLocal
+      ? '<span class="tree__badge tree__badge--local">local</span>'
+      : (connected
+          ? '<span class="tree__badge tree__badge--ssh-on">ready</span>'
+          : '<span class="tree__badge tree__badge--ssh">ssh</span>');
+
+    const connectBtn = isLocal
+      ? '<button class="iconbtn iconbtn--xs" data-action="probe" title="Probe docker">' +
+          '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5"/><path d="M8 5v3l2 1"/></svg>' +
         '</button>'
-      : '<button class="iconbtn iconbtn--xs iconbtn--accent" data-action="connect" title="Connect">' +
-          '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10L4 12a2.5 2.5 0 003.5 3.5L10 13M10 6l2-2a2.5 2.5 0 00-3.5-3.5L6 3M6 10l4-4"/></svg>' +
-        '</button>';
+      : connected
+        ? '<button class="iconbtn iconbtn--xs" data-action="disconnect" title="Disconnect">' +
+            '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>' +
+          '</button>'
+        : '<button class="iconbtn iconbtn--xs iconbtn--accent" data-action="connect" title="Connect">' +
+            '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10L4 12a2.5 2.5 0 003.5 3.5L10 13M10 6l2-2a2.5 2.5 0 00-3.5-3.5L6 3M6 10l4-4"/></svg>' +
+          '</button>';
+
     parts.push(
-      '<div class="tree__server' + (collapsed ? ' tree__server--collapsed' : '') + '" data-server-id="' + server.id + '">' +
+      '<div class="tree__server' + (collapsed ? ' tree__server--collapsed' : '') + (isLocal ? ' tree__server--local' : '') + '" data-server-id="' + server.id + '">' +
         '<div class="tree__server-row" data-action="toggle">' +
           '<span class="tree__caret">' + caret + '</span>' +
-          '<span class="tree__status' + statusClass + '" title="' + (connected ? 'Ready (passphrase cached) — no live SSH socket' : 'Not ready') + '"></span>' +
-          '<span class="tree__server-name">' + escapeHtml(server.name) + '</span>' +
+          '<span class="tree__server-icon ' + iconClass + '">' + icon + '</span>' +
+          '<span class="tree__server-info">' +
+            '<span class="tree__server-name">' + escapeHtml(server.name) + '</span>' +
+            '<span class="tree__server-sub ' + subClass + '">' + escapeHtml(subtitle) + '</span>' +
+          '</span>' +
+          badge +
           '<span class="tree__server-meta mono">' + targets.length + '</span>' +
           '<span class="tree__server-actions">' +
             connectBtn +
@@ -260,6 +295,9 @@ function renderServerTree() {
       } else if (action === 'disconnect') {
         e.stopPropagation();
         disconnectServer(serverId);
+      } else if (action === 'probe') {
+        e.stopPropagation();
+        probeLocalServer(serverId);
       } else if (action === 'discover') {
         e.stopPropagation();
         startDiscovery(serverId);
@@ -366,18 +404,101 @@ function renderActivity() {
 
 let editingServerId = null;
 
+function setServerModalKind(kind) {
+  const form = $('serverForm');
+  form.elements.kind.value = kind;
+  for (const btn of form.querySelectorAll('[data-server-kind]')) {
+    btn.classList.toggle('segmented__btn--active', btn.dataset.serverKind === kind);
+  }
+  for (const block of form.querySelectorAll('[data-show-when-server-kind]')) {
+    block.hidden = block.dataset.showWhenServerKind !== kind;
+  }
+  // SSH fields are required only when in SSH mode.
+  for (const el of [form.elements.host, form.elements.user, form.elements.privateKeyPath]) {
+    if (el) el.required = (kind === 'ssh');
+  }
+  if (kind === 'local') populateWslDistros();
+}
+
+function updateComposeHints(server) {
+  const pathHint = $('vpsComposePathHint');
+  const loadHint = $('composeLoadHint');
+  if (server.kind === 'local') {
+    if (pathHint) {
+      pathHint.innerHTML = server.wslDistro
+        ? 'Path inside the <span class="mono">' + escapeHtml(server.wslDistro) + '</span> WSL distro (e.g. <span class="mono">/home/user/project</span>). Use <strong>Load projects</strong> below to auto-fill.'
+        : 'Path on this machine containing <span class="mono">docker-compose.yml</span>. Use <strong>Load projects</strong> below to auto-fill.';
+    }
+    if (loadHint) {
+      loadHint.textContent = 'No passphrase needed — runs locally. You can also fill the fields above manually.';
+    }
+  } else {
+    if (pathHint) {
+      pathHint.innerHTML = 'Directory on the VPS containing <span class="mono">docker-compose.yml</span>.';
+    }
+    if (loadHint) {
+      loadHint.textContent = 'Requires entering the SSH passphrase. You can also fill the fields above manually.';
+    }
+  }
+}
+
+function serverPickerSubtitle(s) {
+  if (s.kind === 'local') {
+    return s.wslDistro ? 'local · WSL: ' + s.wslDistro : 'local';
+  }
+  return s.host || 'ssh';
+}
+
+async function populateWslDistros() {
+  const sel = $('serverWslDistro');
+  if (!sel) return;
+  // Preserve current selection across re-population.
+  const current = sel.value;
+  try {
+    const res = await window.dbm.wsl.listDistros();
+    const distros = (res && res.distros) || [];
+    sel.innerHTML = '<option value="">— Run on Windows directly (Docker Desktop) —</option>'
+      + distros.map((d) => '<option value="' + escapeHtml(d.name) + '">' + escapeHtml(d.name) + '</option>').join('');
+    if (current) sel.value = current;
+    sel.disabled = false;
+    if (!distros.length && (res && res.error)) {
+      // No distros / WSL not installed — leave dropdown with just the
+      // "direct" option. The hint text under the field explains the choice.
+    }
+  } catch {
+    sel.disabled = true;
+  }
+}
+
 function openServerModal(existing) {
   editingServerId = existing ? existing.id : null;
   const form = $('serverForm');
   form.reset();
   $('serverFormError').hidden = true;
   $('serverModalTitle').textContent = existing ? 'Edit server' : 'New server';
+
+  // Wire the segmented control once (lazily). Re-binding is harmless because
+  // the buttons stay the same DOM nodes.
+  for (const btn of form.querySelectorAll('[data-server-kind]')) {
+    btn.onclick = () => setServerModalKind(btn.dataset.serverKind);
+  }
+
+  const kind = existing ? (existing.kind || 'ssh') : 'ssh';
+  setServerModalKind(kind);
+
   if (existing) {
     form.elements.name.value = existing.name;
-    form.elements.host.value = existing.host;
-    form.elements.port.value = existing.port || 22;
-    form.elements.user.value = existing.user;
-    form.elements.privateKeyPath.value = existing.privateKeyPath;
+    if (kind === 'ssh') {
+      form.elements.host.value = existing.host || '';
+      form.elements.port.value = existing.port || 22;
+      form.elements.user.value = existing.user || '';
+      form.elements.privateKeyPath.value = existing.privateKeyPath || '';
+    } else if (kind === 'local' && existing.wslDistro) {
+      // Will be set onto the dropdown after populateWslDistros resolves —
+      // store on the element as a pending value the populator will honor.
+      const sel = $('serverWslDistro');
+      if (sel) sel.value = existing.wslDistro;
+    }
     form.elements.sudoForDocker.checked = !!existing.sudoForDocker;
   } else {
     form.elements.port.value = '22';
@@ -391,14 +512,16 @@ function closeServerModal() { $('serverModal').hidden = true; editingServerId = 
 async function onServerSubmit(e) {
   e.preventDefault();
   const f = e.target.elements;
-  const input = {
-    name: f.name.value.trim(),
-    host: f.host.value.trim(),
-    port: Number(f.port.value) || 22,
-    user: f.user.value.trim(),
-    privateKeyPath: f.privateKeyPath.value.trim(),
-    sudoForDocker: f.sudoForDocker.checked,
-  };
+  const kind = f.kind.value || 'ssh';
+  const input = { name: f.name.value.trim(), kind, sudoForDocker: f.sudoForDocker.checked };
+  if (kind === 'ssh') {
+    input.host = f.host.value.trim();
+    input.port = Number(f.port.value) || 22;
+    input.user = f.user.value.trim();
+    input.privateKeyPath = f.privateKeyPath.value.trim();
+  } else if (kind === 'local') {
+    input.wslDistro = (f.wslDistro && f.wslDistro.value) || null;
+  }
   try {
     if (editingServerId) await window.dbm.servers.update(editingServerId, input);
     else await window.dbm.servers.create(input);
@@ -451,6 +574,22 @@ async function ensureConnected(serverId) {
 
 async function connectServer(id) { await ensureConnected(id); }
 
+async function probeLocalServer(id) {
+  const server = state.servers.find((s) => s.id === id);
+  if (!server) return;
+  flashStatus('Probing ' + server.name + '…');
+  const res = await window.dbm.connection.test(id, '');
+  if (res.ok) {
+    state.connections[id] = true;
+    renderServerTree();
+    flashStatus('Local docker ready' + (res.dockerComposeVersion ? ' · v' + res.dockerComposeVersion : ''));
+  } else {
+    state.connections[id] = false;
+    renderServerTree();
+    flashStatus('Probe failed: ' + (res.error || 'unknown'));
+  }
+}
+
 async function disconnectServer(id) {
   await window.dbm.connection.disconnect(id);
   state.connections[id] = false;
@@ -502,7 +641,7 @@ function openTargetModal(existing, defaults) {
   // Populate server picker.
   const picker = $('targetServerPicker');
   picker.innerHTML = state.servers.length
-    ? state.servers.map((s) => '<option value="' + s.id + '">' + escapeHtml(s.name) + ' (' + escapeHtml(s.host) + ')</option>').join('')
+    ? state.servers.map((s) => '<option value="' + s.id + '">' + escapeHtml(s.name) + ' (' + escapeHtml(serverPickerSubtitle(s)) + ')</option>').join('')
     : '<option value="">No servers — add one first</option>';
 
   if (existing) {
@@ -619,18 +758,25 @@ async function refreshComposePickers(opts = {}) {
   const server = state.servers.find((s) => s.id === serverId);
   if (!server) return hideComposePickers();
 
+  updateComposeHints(server);
   hideComposePickers();
 
-  // If not connected and the caller didn't force, just offer the "Load…" button.
-  if (!state.connections[serverId] && !opts.force) {
+  // For local servers there's no passphrase to cache or prompt for — go
+  // straight to listProjects on every modal open. For SSH servers we keep the
+  // existing "wait for the user to click Load" gate so we don't trigger a
+  // passphrase prompt the moment they open the modal.
+  const isLocal = server.kind === 'local';
+  if (!isLocal && !state.connections[serverId] && !opts.force) {
     $('composeLoadFromServer').hidden = false;
     return;
   }
 
   showComposeStatus('Listing compose projects on ' + server.name + '…');
 
-  const ok = await ensureConnected(serverId);
-  if (!ok) { hideComposePickers(); return; }
+  if (!isLocal) {
+    const ok = await ensureConnected(serverId);
+    if (!ok) { hideComposePickers(); return; }
+  }
 
   const res = await window.dbm.compose.listProjects(serverId, '');
   if (!res.ok) {
@@ -752,6 +898,144 @@ async function onDeleteTarget() {
   await refreshAll();
 }
 
+// ---------- View DB ----------
+
+const vdb = { targetId: null, passphrase: null, schema: null, table: null, page: 0, hasMore: false };
+
+async function onViewDb() {
+  const t = selectedTarget(); if (!t) return;
+  const server = selectedServer();
+
+  // Ask for passphrase if needed (SSH VPS with a key that may be passphrase-protected).
+  let pass;
+  if (server && server.kind === 'ssh' && server.privateKeyPath) {
+    pass = await askPassphrase(server.name);
+    if (pass === null) return; // user cancelled
+  }
+
+  vdb.targetId = t.id;
+  vdb.passphrase = pass || null;
+  vdb.schema = null;
+  vdb.table = null;
+  vdb.page = 0;
+
+  $('viewDbTitle').textContent = 'View DB — ' + escapeHtml(t.dbName);
+  $('viewDbTableList').innerHTML = '';
+  $('viewDbLoading').hidden = false;
+  $('viewDbError').hidden = true;
+  $('viewDbEmpty').hidden = false;
+  $('viewDbDataWrap').hidden = true;
+  $('viewDbDataLoading').hidden = true;
+  $('viewDbDataError').hidden = true;
+  $('viewDbModal').hidden = false;
+
+  const res = await window.dbm.db.listTables(t.id, pass || undefined);
+  $('viewDbLoading').hidden = true;
+  if (!res.ok) {
+    $('viewDbError').textContent = res.error || 'Failed to list tables.';
+    $('viewDbError').hidden = false;
+    return;
+  }
+  renderViewDbTableList(res.tables || []);
+}
+
+function renderViewDbTableList(tables) {
+  const ul = $('viewDbTableList');
+  if (!tables.length) {
+    ul.innerHTML = '<li style="pointer-events:none;color:var(--text-faint)">No tables found.</li>';
+    return;
+  }
+  ul.innerHTML = tables.map((tbl) =>
+    '<li data-schema="' + escapeHtml(tbl.schema) + '" data-table="' + escapeHtml(tbl.table) + '">' +
+      '<span class="viewdb__tbl-schema">' + escapeHtml(tbl.schema) + '.</span>' +
+      escapeHtml(tbl.table) +
+      '<span class="viewdb__tbl-rows">' + (tbl.approxRows >= 0 ? tbl.approxRows.toLocaleString() : '') + '</span>' +
+    '</li>'
+  ).join('');
+  ul.addEventListener('click', (e) => {
+    const li = e.target.closest('li[data-table]');
+    if (!li) return;
+    ul.querySelectorAll('li').forEach((el) => el.classList.remove('is-active'));
+    li.classList.add('is-active');
+    selectViewDbTable(li.dataset.schema, li.dataset.table);
+  }, { once: true });
+  // Re-attach on subsequent calls by replacing node (innerHTML replaces listeners).
+  // Actually since we use innerHTML every time, we need a delegated listener:
+  ul.onclick = (e) => {
+    const li = e.target.closest('li[data-table]');
+    if (!li) return;
+    ul.querySelectorAll('li').forEach((el) => el.classList.remove('is-active'));
+    li.classList.add('is-active');
+    selectViewDbTable(li.dataset.schema, li.dataset.table);
+  };
+}
+
+async function selectViewDbTable(schema, table) {
+  vdb.schema = schema;
+  vdb.table = table;
+  vdb.page = 0;
+  await fetchViewDbPage();
+}
+
+async function fetchViewDbPage() {
+  $('viewDbEmpty').hidden = true;
+  $('viewDbDataWrap').hidden = true;
+  $('viewDbDataLoading').hidden = false;
+  $('viewDbDataError').hidden = true;
+
+  const offset = vdb.page * 50;
+  const res = await window.dbm.db.queryTable(
+    vdb.targetId, vdb.schema, vdb.table, offset, vdb.passphrase || undefined
+  );
+
+  $('viewDbDataLoading').hidden = true;
+  if (!res.ok) {
+    $('viewDbDataError').textContent = res.error || 'Failed to fetch rows.';
+    $('viewDbDataError').hidden = false;
+    return;
+  }
+  renderViewDbGrid(res);
+}
+
+function renderViewDbGrid({ columns, rows, hasMore }) {
+  vdb.hasMore = !!hasMore;
+
+  $('viewDbHead').innerHTML =
+    '<tr>' + (columns || []).map((c) => '<th>' + escapeHtml(c) + '</th>').join('') + '</tr>';
+
+  $('viewDbBody').innerHTML = (rows || []).map((row) =>
+    '<tr>' + row.map((cell) =>
+      cell === null || cell === ''
+        ? '<td class="is-null">NULL</td>'
+        : '<td title="' + escapeHtml(cell) + '">' + escapeHtml(cell) + '</td>'
+    ).join('') + '</tr>'
+  ).join('');
+
+  const pageNum = vdb.page + 1;
+  $('viewDbPageLabel').textContent = rows.length === 0 ? 'No rows' : 'Page ' + pageNum;
+  $('viewDbPrev').disabled = vdb.page === 0;
+  $('viewDbNext').disabled = !hasMore;
+  $('viewDbDataWrap').hidden = false;
+}
+
+function viewDbChangePage(delta) {
+  const next = vdb.page + delta;
+  if (next < 0) return;
+  if (delta > 0 && !vdb.hasMore) return;
+  vdb.page = next;
+  fetchViewDbPage();
+}
+
+function closeViewDbModal() {
+  $('viewDbModal').hidden = true;
+  vdb.targetId = null;
+  vdb.passphrase = null;
+  vdb.schema = null;
+  vdb.table = null;
+  vdb.page = 0;
+  vdb.hasMore = false;
+}
+
 // ---------- passphrase modal ----------
 
 let passResolver = null;
@@ -782,9 +1066,11 @@ const PHASE_LABELS = {
   'ssh:authenticated':   'Authenticated — preparing pg_dump…',
   authenticated:         'Authenticated — preparing pg_dump…',
   'starting-dump':       'Running pg_dump inside container…',
+  'starting-restore':    'Starting pg_restore…',
   waiting:               'Waiting for pg_dump to produce data…',
   streaming:             'Streaming dump…',
   stalled:               'Stalled — no data from pg_dump',
+  finalizing:            'Finalizing — pg_restore processing data…',
   done:                  'Completed',
   error:                 'Failed',
   cancelled:             'Cancelled',
@@ -793,16 +1079,18 @@ const PHASE_LABELS = {
 const CONNECT_PHASES = new Set([
   'opening', 'connecting', 'ssh-connecting',
   'ssh:tcp-connecting', 'ssh:handshake', 'ssh:host-key-check',
+  'finalizing',
 ]);
 
 async function onBackupNow() {
   const t = selectedTarget(); if (!t) return;
-  if (t.kind !== 'docker-compose-vps') {
-    showOpError('External-URI backups are not yet wired up. Coming next.');
+  const server = selectedServer();
+  if (t.kind === 'docker-compose-vps' && !server) {
+    showOpError('This target has no server attached. Edit the target to fix.');
     return;
   }
-  const server = selectedServer();
-  if (!server) { showOpError('This target has no server attached. Edit the target to fix.'); return; }
+  // For external-uri targets we don't need a server at all — the backend runs
+  // pg_dump locally.
 
   // Skip the pre-flight connection.test entirely. backup:start surfaces
   // NEED_PASSPHRASE if the cached/empty passphrase doesn't unlock the key, and
@@ -811,7 +1099,7 @@ async function onBackupNow() {
   startOpPanel(t, server);
   let res = await window.dbm.backup.start(t.id, '');
   if (!res.ok && res.code === 'NEED_PASSPHRASE') {
-    const entered = await askPassphrase(server.name);
+    const entered = await askPassphrase((server && server.name) || t.name);
     if (entered === null) {
       finishOp(false, null, 'Cancelled by user', 'cancelled');
       return;
@@ -820,8 +1108,8 @@ async function onBackupNow() {
     // the next opId.
     startOpPanel(t, server);
     res = await window.dbm.backup.start(t.id, entered);
-    if (res.ok) state.connections[server.id] = true;
-  } else if (res.ok) {
+    if (res.ok && server) state.connections[server.id] = true;
+  } else if (res.ok && server) {
     state.connections[server.id] = true;
   }
 
@@ -849,7 +1137,7 @@ function startOpPanel(target, server) {
   state.activeBackup = {
     opId: null,
     targetId: target.id,
-    serverId: server.id,
+    serverId: server ? server.id : null,
     startedAt: Date.now(),
     bytes: 0,
     history: [],          // recent { t, b } samples for rate calc
@@ -981,9 +1269,14 @@ function tickOpPanel() {
       }
     }
   } else {
-    // No recent sample — clear rate/ETA so they don't lie.
-    $('opRate').textContent = b.lastByteAt ? 'idle ' + formatDuration(lastSampleAge) : '';
-    $('opRateSep').hidden = !b.lastByteAt;
+    // During finalizing pg_restore is processing — don't show "idle Xs" which looks like it's stuck.
+    if (b.phase === 'finalizing') {
+      $('opRate').textContent = 'pg_restore working…';
+      $('opRateSep').hidden = false;
+    } else {
+      $('opRate').textContent = b.lastByteAt ? 'idle ' + formatDuration(lastSampleAge) : '';
+      $('opRateSep').hidden = !b.lastByteAt;
+    }
     $('opEta').textContent = '';
     $('opEtaSep').hidden = true;
   }
@@ -1076,8 +1369,11 @@ async function startDiscovery(serverId) {
   $('discoverBar').style.width = '15%';
   $('discoverModal').hidden = false;
 
-  const ok = await ensureConnected(serverId);
-  if (!ok) { closeDiscoverModal(); return; }
+  // Local servers don't need an SSH passphrase; skip ensureConnected.
+  if (server.kind !== 'local') {
+    const ok = await ensureConnected(serverId);
+    if (!ok) { closeDiscoverModal(); return; }
+  }
 
   const res = await window.dbm.discovery.run(serverId, '');
   if (!res.ok) {
@@ -1481,55 +1777,154 @@ async function onDownloadDump(dumpPath) {
 
 let pendingRestoreDumpPath = null;
 
+function _serverLabel(server, target) {
+  if (!server) return '(local URI)';
+  if (server.kind === 'local') {
+    return server.wslDistro ? 'local · WSL: ' + server.wslDistro : 'local (Docker)';
+  }
+  return (server.user || '') + '@' + (server.host || '') + ':' + (server.port || 22);
+}
+
+function _targetOptionLabel(t) {
+  const server = state.servers.find((s) => s.id === t.serverId) || null;
+  return t.name + ' [' + t.envTag + '] — ' + t.dbName + ' (' + _serverLabel(server, t) + ')';
+}
+
 function openRestoreModal(dumpPath) {
   pendingRestoreDumpPath = dumpPath;
   const dump = state.dumps.find((d) => d.path === dumpPath);
-  const t = selectedTarget();
-  const server = selectedServer();
-  if (!dump || !t || !server) {
-    flashStatus('Cannot restore: missing dump/target/server context');
-    return;
-  }
-  const lines = [
-    'Source dump: ' + (dump.path.split(/[\\/]/).pop()),
-    'Taken: ' + formatTs(dump.createdAt) + ' · ' + formatBytes(dump.byteSize),
-    '',
-    'Target: ' + t.name + ' [' + t.envTag + ']',
-    'Server: ' + server.user + '@' + server.host + ':' + server.port,
-    'Database: ' + t.dbName + ' (service: ' + (t.vps && t.vps.service) + ')',
-  ];
-  $('restoreModalBody').textContent = lines.join('\n');
+  if (!dump) { flashStatus('Cannot restore: dump not found'); return; }
+
+  // Dump info line
+  const fname = dump.path.split(/[\\/]/).pop();
+  $('restoreModalDumpInfo').textContent =
+    fname + '\n' + formatTs(dump.createdAt) + ' · ' + formatBytes(dump.byteSize);
+
+  // Build target picker grouped by LOCAL / VPS
+  const pgTargets = state.targets.filter((t) => t.engine === 'postgres');
+  if (!pgTargets.length) { flashStatus('No Postgres targets to restore into.'); return; }
+
+  const localTargets = pgTargets.filter((t) => {
+    const s = state.servers.find((x) => x.id === t.serverId);
+    return (s && s.kind === 'local') || t.kind === 'external-uri';
+  });
+  const vpsTargets = pgTargets.filter((t) => {
+    const s = state.servers.find((x) => x.id === t.serverId);
+    return s && s.kind === 'ssh';
+  });
+
+  const makeOption = (t) =>
+    '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(_targetOptionLabel(t)) + '</option>';
+  const parts = [];
+  if (localTargets.length) parts.push('<optgroup label="LOCAL">' + localTargets.map(makeOption).join('') + '</optgroup>');
+  if (vpsTargets.length) parts.push('<optgroup label="VPS">' + vpsTargets.map(makeOption).join('') + '</optgroup>');
+  $('restoreTargetPicker').innerHTML = parts.join('');
+
+  // Pre-select: source dump's target, or current selected target
+  const sourceId = dump.sourceProfileId;
+  const preferred = pgTargets.find((t) => t.id === sourceId) ||
+                    pgTargets.find((t) => t.id === state.selectedTargetId) ||
+                    pgTargets[0];
+  $('restoreTargetPicker').value = preferred.id;
+
+  // Load the DB list for the pre-selected target; default to the dump's dbName
+  const sourceDumpDbName = dump.dbName || preferred.dbName;
+  _loadRestoreDatabases(preferred, sourceDumpDbName);
+
   $('restoreCleanFirst').checked = false;
   $('restoreModalError').hidden = true;
   $('restoreModal').hidden = false;
 }
 
+// Populate #restoreDbPicker for the given target, pre-selecting defaultDbName.
+async function _loadRestoreDatabases(t, defaultDbName) {
+  const dbPicker = $('restoreDbPicker');
+  const dbHint = $('restoreDbHint');
+
+  if (t.kind === 'external-uri') {
+    dbPicker.innerHTML = '<option value="' + escapeHtml(t.dbName) + '">' + escapeHtml(t.dbName) + ' (from URI)</option>';
+    dbPicker.disabled = true;
+    dbHint.textContent = 'Database is encoded in the URI and cannot be changed.';
+    return;
+  }
+  dbPicker.disabled = false;
+  dbPicker.innerHTML = '<option value="">Loading databases…</option>';
+  dbHint.textContent = '';
+
+  const res = await window.dbm.db.listDatabases(t.id);
+  if (!res.ok) {
+    dbPicker.innerHTML = '<option value="' + escapeHtml(t.dbName) + '">' + escapeHtml(t.dbName) + ' (default)</option>';
+    dbHint.textContent = 'Could not load DB list: ' + res.error;
+    return;
+  }
+  const dbs = res.databases || [];
+  if (!dbs.length) {
+    dbPicker.innerHTML = '<option value="' + escapeHtml(t.dbName) + '">' + escapeHtml(t.dbName) + '</option>';
+    return;
+  }
+  dbPicker.innerHTML = dbs.map((db) =>
+    '<option value="' + escapeHtml(db) + '"' + (db === t.dbName ? ' data-default="1"' : '') + '>' +
+      escapeHtml(db) + (db === t.dbName ? ' ✓' : '') +
+    '</option>'
+  ).join('');
+  // Select defaultDbName if it exists in the list, else fall back to target's dbName
+  const toSelect = (defaultDbName && dbs.includes(defaultDbName)) ? defaultDbName
+    : (dbs.includes(t.dbName) ? t.dbName : dbs[0]);
+  dbPicker.value = toSelect;
+  dbHint.textContent = toSelect === t.dbName
+    ? 'Restoring into the same database as the original target.'
+    : 'Restoring into a different database than the original target.';
+}
+
+function onRestoreTargetChange() {
+  const id = $('restoreTargetPicker').value;
+  const t = state.targets.find((x) => x.id === id);
+  if (!t) return;
+  _loadRestoreDatabases(t, '');
+}
+
+function onRestoreDbChange() {
+  const targetId = $('restoreTargetPicker').value;
+  const t = state.targets.find((x) => x.id === targetId);
+  const selectedDb = $('restoreDbPicker').value;
+  if (!t || !selectedDb) return;
+  $('restoreDbHint').textContent = selectedDb === t.dbName
+    ? 'Restoring into the same database as the original target.'
+    : 'Restoring into a different database than the original target.';
+}
+
 function closeRestoreModal() {
   $('restoreModal').hidden = true;
   pendingRestoreDumpPath = null;
+  $('restoreDbPicker').disabled = false;
 }
 
 async function onRestoreConfirm() {
   const dumpPath = pendingRestoreDumpPath;
   if (!dumpPath) return;
-  const t = selectedTarget();
-  const server = selectedServer();
-  if (!t || !server) { closeRestoreModal(); return; }
+
+  const targetId = $('restoreTargetPicker').value;
+  const t = state.targets.find((x) => x.id === targetId);
+  if (!t) { closeRestoreModal(); return; }
+  const server = state.servers.find((s) => s.id === t.serverId) || null;
+  if (t.kind === 'docker-compose-vps' && !server) { closeRestoreModal(); return; }
+
+  const dbNameOverride = $('restoreDbPicker').value || null;
   const cleanFirst = $('restoreCleanFirst').checked;
   closeRestoreModal();
 
   startOpPanel(t, server);
-  let res = await window.dbm.restore.start(dumpPath, { targetId: t.id, cleanFirst, passphrase: '' });
+  let res = await window.dbm.restore.start(dumpPath, { targetId: t.id, cleanFirst, passphrase: '', dbNameOverride });
   if (!res.ok && res.code === 'NEED_PASSPHRASE') {
-    const entered = await askPassphrase(server.name);
+    const entered = await askPassphrase((server && server.name) || t.name);
     if (entered === null) {
       finishOp(false, null, 'Cancelled by user', 'cancelled');
       return;
     }
     startOpPanel(t, server);
-    res = await window.dbm.restore.start(dumpPath, { targetId: t.id, cleanFirst, passphrase: entered });
-    if (res.ok) state.connections[server.id] = true;
-  } else if (res.ok) {
+    res = await window.dbm.restore.start(dumpPath, { targetId: t.id, cleanFirst, passphrase: entered, dbNameOverride });
+    if (res.ok && server) state.connections[server.id] = true;
+  } else if (res.ok && server) {
     state.connections[server.id] = true;
   }
   const b = state.activeBackup;

@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { PassThrough } = require('node:stream');
 
-const sshClient = require('../ssh/client');
+const channel = require('../exec/channel');
 const { DecryptStream } = require('../crypto/stream');
 const pg = require('../db/postgres');
 
@@ -27,21 +27,27 @@ const pg = require('../db/postgres');
 //   signal                — optional AbortSignal
 async function run(opts) {
   const {
-    server, target, dumpPath, cleanFirst,
+    server, target, dumpPath, cleanFirst, dbNameOverride, uri,
     privateKey, passphrase, dumpKey,
     knownHosts, onUntrustedHost, onProgress, signal,
   } = opts;
 
-  if (!server) throw new Error('server is required');
   if (!target) throw new Error('target is required');
   if (!dumpPath) throw new Error('dumpPath is required');
-  if (target.kind !== 'docker-compose-vps') throw new Error('expected docker-compose-vps target');
+  if (target.kind === 'docker-compose-vps') {
+    if (!server) throw new Error('server is required for docker-compose-vps target');
+  } else if (target.kind === 'external-uri') {
+    if (!uri) throw new Error('uri is required for external-uri target');
+  } else {
+    throw new Error('unsupported target.kind: ' + target.kind);
+  }
   if (!fs.existsSync(dumpPath)) throw new Error('dump file not found: ' + dumpPath);
+  const isLocal = !server || server.kind === 'local' || target.kind === 'external-uri';
 
   const startedAt = new Date();
   const emit = (phase, extra) => { if (onProgress) try { onProgress({ phase, ...(extra || {}) }); } catch {} };
 
-  let client = null;
+  let ch = null;
   let stream = null;
   let promiseOnErr = null;
   let aborted = false;
@@ -52,7 +58,7 @@ async function run(opts) {
       try { stream.signal && stream.signal('TERM'); } catch {}
       try { stream.destroy && stream.destroy(); } catch {}
     }
-    if (client) { try { client.end(); } catch {} }
+    if (ch) { try { ch.end(); } catch {} }
   };
 
   const onAbort = () => {
@@ -65,16 +71,10 @@ async function run(opts) {
     signal.addEventListener('abort', onAbort, { once: true });
   }
 
-  emit('ssh-connecting');
+  emit(isLocal ? 'local-spawning' : 'ssh-connecting');
   try {
-    client = await sshClient.connect({
-      host: server.host,
-      port: server.port,
-      username: server.user,
-      privateKey,
-      passphrase,
-      knownHosts,
-      onUntrustedHost,
+    ch = await channel.connect(server, {
+      privateKey, passphrase, knownHosts, onUntrustedHost,
       onProgress: (p) => { if (p && p.phase) emit(p.phase); },
     });
   } catch (err) {
@@ -84,26 +84,37 @@ async function run(opts) {
   if (aborted) throw new Error('cancelled');
   emit('authenticated');
 
-  const command = pg.vpsRestoreCommand({
-    composeBin: server.composeBin,
-    sudo: !!server.sudoForDocker,
-    composeProjectPath: target.vps && target.vps.composeProjectPath,
-    projectName: target.vps && target.vps.projectName,
-    service: target.vps.service,
-    dbName: target.dbName,
-    pgUser: target.vps && target.vps.pgUser,
-    cleanFirst: !!cleanFirst,
-  });
+  let command;
+  let execEnv;
+  if (target.kind === 'docker-compose-vps') {
+    command = pg.vpsRestoreCommand({
+      composeBin: server.composeBin,
+      sudo: !!server.sudoForDocker,
+      composeProjectPath: target.vps && target.vps.composeProjectPath,
+      projectName: target.vps && target.vps.projectName,
+      service: target.vps.service,
+      dbName: dbNameOverride || target.dbName,
+      pgUser: target.vps && target.vps.pgUser,
+      cleanFirst: !!cleanFirst,
+    });
+  } else {
+    command = pg.uriRestoreCommand({ cleanFirst: !!cleanFirst });
+    execEnv = { PGURI: uri };
+  }
 
   emit('starting-restore');
   try {
-    stream = await sshClient.exec(client, command);
+    stream = await ch.exec(command, execEnv ? { env: execEnv } : undefined);
   } catch (err) {
-    try { client.end(); } catch {}
+    ch.end();
     if (aborted) throw new Error('cancelled');
     throw err;
   }
   if (aborted) throw new Error('cancelled');
+  // pg_restore writes nothing useful to stdout, but we must drain it.
+  // If nobody reads the stdout PassThrough its buffer fills, backpressure
+  // stalls child.stdout, and the process hangs waiting to flush — never exiting.
+  stream.resume();
   emit('waiting');
 
   return new Promise((resolve, reject) => {
@@ -123,7 +134,7 @@ async function run(opts) {
         if (stallTimer) { clearInterval(stallTimer); stallTimer = null; }
         if (postEofTimerRef.current) { clearTimeout(postEofTimerRef.current); postEofTimerRef.current = null; }
         try { stream && stream.destroy && stream.destroy(); } catch {}
-        try { client && client.end(); } catch {}
+        try { ch && ch.end(); } catch {}
         reject(err);
       });
     };
@@ -149,10 +160,16 @@ async function run(opts) {
       }
     });
 
-    let streamClosed = false;
-    stream.on('exit', (code, sig) => { exitCode = code; exitSignal = sig; });
+    let streamDone = false; // true when exit OR close fires — whichever comes first
+    stream.on('exit', (code, sig) => {
+      exitCode = code; exitSignal = sig;
+      // On WSL/Docker, 'close' may never fire because the OS stdout pipe stays
+      // open past the child's exit. 'exit' alone proves pg_restore finished.
+      streamDone = true;
+      if (postEofTimerRef.current) { clearTimeout(postEofTimerRef.current); postEofTimerRef.current = null; }
+    });
     stream.on('close', () => {
-      streamClosed = true;
+      streamDone = true;
       if (postEofTimerRef.current) { clearTimeout(postEofTimerRef.current); postEofTimerRef.current = null; }
     });
 
@@ -161,7 +178,7 @@ async function run(opts) {
     // remote channel stops accepting writes, we want to know.
     const WARN_MS = 30_000;
     const STUCK_MS = 5 * 60_000;
-    const POST_EOF_MS = 30_000; // pg_restore may take longer than dump to finalize after stdin ends
+    const POST_EOF_MS = 30 * 60_000; // pg_restore rebuilds indexes/constraints after EOF — can take many minutes
     let lastByteAt = Date.now();
     let stallWarned = false;
     stallTimer = setInterval(() => {
@@ -201,13 +218,16 @@ async function run(opts) {
 
     // When tee ends (entire decrypted dump written), close remote stdin so
     // pg_restore knows there's no more input and can finalize.
+    // Clear the stdin-stall watchdog here — all data has been written so
+    // "no bytes written" is expected. The post-EOF timer takes over.
     tee.on('end', () => {
+      if (stallTimer) { clearInterval(stallTimer); stallTimer = null; }
       try { stream.stdin.end(); } catch {}
       emit('finalizing');
       // Wait for remote process to actually finish.
       const waitedAt = Date.now();
       const wait = () => {
-        if (streamClosed) {
+        if (streamDone) {
           if (stallTimer) { clearInterval(stallTimer); stallTimer = null; }
           if (exitCode !== 0) {
             return onErr(new Error(
@@ -216,14 +236,14 @@ async function run(opts) {
               (stderrBuf ? '\n' + stderrBuf.trim() : '')
             ));
           }
-          try { client.end(); } catch {}
+          try { ch && ch.end(); } catch {}
           const finishedAt = new Date();
           const meta = {
             schemaVersion: 1,
             op: 'restore',
             engine: 'postgres',
-            serverId: server.id,
-            serverName: server.name,
+            serverId: server ? server.id : null,
+            serverName: server ? server.name : null,
             targetId: target.id,
             targetName: target.name,
             envTag: target.envTag,

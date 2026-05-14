@@ -121,6 +121,24 @@ test('parsePsqlDbList strips blanks and whitespace', () => {
   assert.deepEqual(out, ['intranet_main', 'intranet_audit', 'uptime']);
 });
 
+test('uriDumpCommand uses $PGURI env (no URI in argv) with default compression', () => {
+  const cmd = pg.uriDumpCommand({});
+  assert.match(cmd, /^pg_dump -Fc --verbose -Z 1 -d "\$PGURI"$/);
+});
+
+test('uriDumpCommand honors custom compression level', () => {
+  const cmd = pg.uriDumpCommand({ compressionLevel: 6 });
+  assert.match(cmd, /-Z 6 /);
+});
+
+test('uriRestoreCommand without cleanFirst', () => {
+  assert.equal(pg.uriRestoreCommand({}), 'pg_restore -d "$PGURI"');
+});
+
+test('uriRestoreCommand with cleanFirst adds --clean --if-exists', () => {
+  assert.equal(pg.uriRestoreCommand({ cleanFirst: true }), 'pg_restore --clean --if-exists -d "$PGURI"');
+});
+
 test('parseListing parses pg_restore --list output', () => {
   const text = [
     '; Archive created by pg_dump',

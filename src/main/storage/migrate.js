@@ -41,6 +41,7 @@ function transform(legacyProfiles, now) {
       if (!server) {
         server = {
           id: crypto.randomUUID(),
+          kind: 'ssh',
           name: p.vps.host,
           host: p.vps.host,
           port: Number(p.vps.port) || 22,

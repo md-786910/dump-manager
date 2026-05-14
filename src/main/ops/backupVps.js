@@ -1,8 +1,9 @@
 'use strict';
 
-// VPS Postgres backup: opens an SSH connection to the Server, runs
-// `<composeBin> exec -T <service> pg_dump -Fc -d <db>` inside the remote
-// container, and streams stdout straight into a locally-encrypted file.
+// Postgres backup: opens an exec channel (SSH or local) to the Server (or to
+// localhost for external-uri targets), runs pg_dump inside a docker-compose
+// service (docker-compose-vps target) OR directly via libpq (external-uri
+// target), and streams stdout straight into a locally-encrypted file.
 // No temp files anywhere.
 
 const fs = require('node:fs');
@@ -10,19 +11,20 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { PassThrough } = require('node:stream');
 
-const sshClient = require('../ssh/client');
+const channel = require('../exec/channel');
 const { EncryptStream } = require('../crypto/stream');
 const pg = require('../db/postgres');
 const dumps = require('../storage/dumps');
 
 // `opts`:
-//   server, target    — resolved records
-//   privateKey        — Buffer (read from server.privateKeyPath by caller)
-//   passphrase        — string | undefined
+//   server, target    — resolved records (server may be null for external-uri)
+//   privateKey        — Buffer (only used for SSH servers)
+//   passphrase        — string | undefined (SSH only)
+//   uri               — string (external-uri targets only — caller decrypts)
 //   dumpKey           — 32-byte Buffer from keychain.ensure()
-//   knownHosts        — api from ssh/knownHosts.js
+//   knownHosts        — api from ssh/knownHosts.js (SSH only)
 //   userDataApp       — Electron `app` (for dumps.ensureDir)
-//   onUntrustedHost   — optional TOFU prompt callback
+//   onUntrustedHost   — optional TOFU prompt callback (SSH only)
 //   onProgress        — optional ({ bytes }) => void as ciphertext is written
 //   signal            — optional AbortSignal
 //
@@ -30,13 +32,19 @@ const dumps = require('../storage/dumps');
 // partial dump + sidecar.
 async function run(opts) {
   const {
-    server, target, privateKey, passphrase, dumpKey,
+    server, target, privateKey, passphrase, uri, dumpKey,
     knownHosts, userDataApp, onUntrustedHost, onProgress, signal,
   } = opts;
 
-  if (!server) throw new Error('server is required');
   if (!target) throw new Error('target is required');
-  if (target.kind !== 'docker-compose-vps') throw new Error('expected docker-compose-vps target');
+  if (target.kind === 'docker-compose-vps') {
+    if (!server) throw new Error('server is required for docker-compose-vps target');
+  } else if (target.kind === 'external-uri') {
+    if (!uri) throw new Error('uri is required for external-uri target');
+  } else {
+    throw new Error('unsupported target.kind: ' + target.kind);
+  }
+  const isLocal = !server || server.kind === 'local' || target.kind === 'external-uri';
 
   dumps.ensureDir(userDataApp);
   const startedAt = new Date();
@@ -50,7 +58,8 @@ async function run(opts) {
   // Abort state is owned by the whole run, not just the Promise body, so a
   // cancel during sshClient.connect or sshClient.exec (which happen *before*
   // the Promise) still tears the right things down.
-  let client = null;
+  let client = null; // legacy alias for the ssh client (may be null for local)
+  let ch = null;
   let stream = null;
   let promiseOnErr = null; // set once the Promise body installs its error path
   let aborted = false;
@@ -63,9 +72,7 @@ async function run(opts) {
       try { stream.signal && stream.signal('TERM'); } catch {}
       try { stream.destroy && stream.destroy(); } catch {}
     }
-    if (client) {
-      try { client.end(); } catch {}
-    }
+    if (ch) { try { ch.end(); } catch {} }
   };
 
   const onAbort = () => {
@@ -78,18 +85,13 @@ async function run(opts) {
     signal.addEventListener('abort', onAbort, { once: true });
   }
 
-  emit('ssh-connecting');
+  emit(isLocal ? 'local-spawning' : 'ssh-connecting');
   try {
-    client = await sshClient.connect({
-      host: server.host,
-      port: server.port,
-      username: server.user,
-      privateKey,
-      passphrase,
-      knownHosts,
-      onUntrustedHost,
+    ch = await channel.connect(server, {
+      privateKey, passphrase, knownHosts, onUntrustedHost,
       onProgress: (p) => { if (p && p.phase) emit(p.phase); },
     });
+    client = ch.client;
   } catch (err) {
     if (aborted) throw new Error('cancelled');
     throw err;
@@ -97,22 +99,30 @@ async function run(opts) {
   if (aborted) throw new Error('cancelled');
   emit('authenticated');
 
-  const command = pg.vpsDumpCommand({
-    composeBin: server.composeBin,
-    sudo: !!server.sudoForDocker,
-    composeProjectPath: target.vps && target.vps.composeProjectPath,
-    projectName: target.vps && target.vps.projectName,
-    service: target.vps.service,
-    dbName: target.dbName,
-    pgUser: target.vps && target.vps.pgUser,
-    compressionLevel: target.vps && target.vps.compressionLevel,
-  });
+  let command;
+  let execEnv;
+  if (target.kind === 'docker-compose-vps') {
+    command = pg.vpsDumpCommand({
+      composeBin: server.composeBin,
+      sudo: !!server.sudoForDocker,
+      composeProjectPath: target.vps && target.vps.composeProjectPath,
+      projectName: target.vps && target.vps.projectName,
+      service: target.vps.service,
+      dbName: target.dbName,
+      pgUser: target.vps && target.vps.pgUser,
+      compressionLevel: target.vps && target.vps.compressionLevel,
+    });
+  } else {
+    // external-uri — pass URI via env so it isn't visible in process listings.
+    command = pg.uriDumpCommand({ compressionLevel: target.uriOpts && target.uriOpts.compressionLevel });
+    execEnv = { PGURI: uri };
+  }
 
   emit('starting-dump');
   try {
-    stream = await sshClient.exec(client, command);
+    stream = await ch.exec(command, execEnv ? { env: execEnv } : undefined);
   } catch (err) {
-    try { client.end(); } catch {}
+    ch.end();
     if (aborted) throw new Error('cancelled');
     throw err;
   }
@@ -136,9 +146,9 @@ async function run(opts) {
     const onErr = (err) => {
       finish(() => {
         if (stallTimer) { clearInterval(stallTimer); stallTimer = null; }
-        if (postEofTimerRef.currentRef.current) { clearTimeout(postEofTimerRef.currentRef.current); postEofTimerRef.currentRef.current = null; }
+        if (postEofTimerRef.current) { clearTimeout(postEofTimerRef.current); postEofTimerRef.current = null; }
         try { stream && stream.destroy && stream.destroy(); } catch {}
-        try { client && client.end(); } catch {}
+        try { ch && ch.end(); } catch {}
         try { sink.destroy(); } catch {}
         try { fs.existsSync(dumpFile) && fs.unlinkSync(dumpFile); } catch {}
         reject(err);
@@ -233,7 +243,7 @@ async function run(opts) {
     const finalizeSuccess = () => {
       if (stallTimer) { clearInterval(stallTimer); stallTimer = null; }
       if (postEofTimerRef.current) { clearTimeout(postEofTimerRef.current); postEofTimerRef.current = null; }
-      try { client.end(); } catch {}
+      try { ch && ch.end(); } catch {}
       if (exitCode !== 0) {
         return onErr(new Error(
           'pg_dump exited with code ' + exitCode +

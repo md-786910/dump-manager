@@ -77,6 +77,7 @@
             <button class="btn btn--primary" id="btnBackupNow">
               Backup now
             </button>
+            <button class="btn btn--ghost" id="btnViewDb">View DB</button>
             <button class="btn btn--ghost" id="btnEditTarget">Edit</button>
             <button class="btn btn--ghost" id="btnDeleteTarget">Delete</button>
           </div>
@@ -200,9 +201,18 @@
                 >A short label you'll recognize in the sidebar.</span
               >
             </label>
+            <div class="form__field">
+              <span class="form__label">Connection kind</span>
+              <div class="segmented" role="tablist">
+                <button type="button" class="segmented__btn segmented__btn--active" data-server-kind="ssh">SSH (VPS)</button>
+                <button type="button" class="segmented__btn" data-server-kind="local">Local (Docker)</button>
+              </div>
+              <input type="hidden" name="kind" value="ssh" />
+              <span class="form__hint">Local mode skips SSH and shells out to Docker on this machine.</span>
+            </div>
           </section>
 
-          <section class="form__section">
+          <section class="form__section" data-show-when-server-kind="ssh">
             <h4 class="form__legend">SSH</h4>
             <div class="form__row">
               <label class="form__field">
@@ -260,6 +270,19 @@
                 >The file stays where it is — never copied into dbManager.</span
               >
             </div>
+          </section>
+
+          <section class="form__section" data-show-when-server-kind="local">
+            <h4 class="form__legend">WSL</h4>
+            <label class="form__field">
+              <span class="form__label">WSL distro (optional)</span>
+              <select class="input mono" name="wslDistro" id="serverWslDistro">
+                <option value="">— Run on Windows directly (Docker Desktop) —</option>
+              </select>
+              <span class="form__hint">
+                If docker is installed inside a WSL distro (not Docker Desktop), pick the distro here so commands are wrapped in <span class="mono">wsl -d &lt;distro&gt; --</span>. Leave blank if <span class="mono">docker</span> is on the Windows PATH.
+              </span>
+            </label>
           </section>
 
           <section class="form__section">
@@ -407,7 +430,7 @@
                   name="vps_composeProjectPath"
                   placeholder="/srv/app"
                 />
-                <span class="form__hint"
+                <span class="form__hint" id="vpsComposePathHint"
                   >Directory on the VPS containing
                   <span class="mono">docker-compose.yml</span>.</span
                 >
@@ -445,7 +468,7 @@
               </label>
               <div class="form__field" id="composeLoadFromServer" hidden>
                 <button type="button" class="btn btn--ghost btn--sm" id="composeLoadBtn">Load projects from server…</button>
-                <span class="form__hint">Requires entering the SSH passphrase. You can also fill the fields above manually.</span>
+                <span class="form__hint" id="composeLoadHint">Requires entering the SSH passphrase. You can also fill the fields above manually.</span>
               </div>
             </div>
 
@@ -646,7 +669,24 @@
           </button>
         </header>
         <div class="form">
-          <p class="form__hint" id="restoreModalBody">…</p>
+          <section class="form__section">
+            <h4 class="form__legend">Source dump</h4>
+            <p class="form__hint mono" id="restoreModalDumpInfo">…</p>
+          </section>
+          <section class="form__section">
+            <h4 class="form__legend">Restore into</h4>
+            <div class="form__field">
+              <label class="form__label">Target (server · service)</label>
+              <select class="input" id="restoreTargetPicker">
+                <!-- populated by JS with <optgroup label="LOCAL"> and <optgroup label="VPS"> -->
+              </select>
+            </div>
+            <div class="form__field">
+              <label class="form__label">Database</label>
+              <select class="input" id="restoreDbPicker"></select>
+              <span class="form__hint" id="restoreDbHint"></span>
+            </div>
+          </section>
           <label class="form__checkbox">
             <input type="checkbox" id="restoreCleanFirst" />
             <span>
@@ -660,6 +700,45 @@
             <button type="button" class="btn btn--ghost" id="restoreModalCancel">Cancel</button>
             <button type="button" class="btn btn--danger" id="restoreModalConfirm">Restore</button>
           </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- View DB modal -->
+    <div class="modal modal--wide" id="viewDbModal" hidden>
+      <div class="modal__backdrop"></div>
+      <div class="modal__card modal__card--wide" role="dialog" aria-modal="true" aria-labelledby="viewDbTitle">
+        <header class="modal__head">
+          <h3 class="modal__title" id="viewDbTitle">View DB</h3>
+          <button class="iconbtn" id="viewDbModalClose" aria-label="Close">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+          </button>
+        </header>
+        <div class="viewdb">
+          <div class="viewdb__sidebar">
+            <div class="viewdb__sidebar-head">Tables</div>
+            <div id="viewDbLoading" class="viewdb__status" hidden>Loading…</div>
+            <div id="viewDbError" class="viewdb__status viewdb__status--error" hidden></div>
+            <ul class="viewdb__table-list" id="viewDbTableList"></ul>
+          </div>
+          <div class="viewdb__main">
+            <div id="viewDbEmpty" class="viewdb__status">Select a table to view its data.</div>
+            <div id="viewDbDataWrap" hidden>
+              <div class="viewdb__grid-wrap">
+                <table class="viewdb__grid">
+                  <thead id="viewDbHead"></thead>
+                  <tbody id="viewDbBody"></tbody>
+                </table>
+              </div>
+              <div class="viewdb__pager">
+                <button type="button" class="btn btn--ghost btn--sm" id="viewDbPrev">&#8592; Prev</button>
+                <span class="viewdb__page-label" id="viewDbPageLabel">Page 1</span>
+                <button type="button" class="btn btn--ghost btn--sm" id="viewDbNext">Next &#8594;</button>
+              </div>
+            </div>
+            <div id="viewDbDataLoading" class="viewdb__status" hidden>Loading rows…</div>
+            <div id="viewDbDataError" class="viewdb__status viewdb__status--error" hidden></div>
+          </div>
         </div>
       </div>
     </div>

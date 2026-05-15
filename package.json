@@ -16,6 +16,7 @@
     "dev:web": "node scripts/dev-server.js",
     "test": "node --test test/*.test.js",
     "pack": "electron-builder --dir",
+    "icons": "bash scripts/generate-icons.sh",
     "build": "electron-builder -lwm",
     "build:linux": "electron-builder -l",
     "build:win": "electron-builder -w",

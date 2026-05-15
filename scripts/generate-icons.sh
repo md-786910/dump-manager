@@ -18,11 +18,11 @@ echo "→ Generating build/icon.icns + build/icon.ico from build/icon.png…"
 npx electron-icon-builder --input="$ROOT/build/icon.png" --output="$ROOT/build" --flatten
 
 echo "→ Copying platform icons to assets/…"
-cp "$ROOT/build/icons/mac/icon.icns" "$ROOT/assets/macos/app.icns"
-cp "$ROOT/build/icons/win/icon.ico"  "$ROOT/assets/windows/app.ico"
+cp "$ROOT/build/icons/icon.icns" "$ROOT/assets/macos/app.icns"
+cp "$ROOT/build/icons/icon.ico"  "$ROOT/assets/windows/app.ico"
 
 echo "→ Generating Linux PNG sizes…"
-for SIZE in 16 32 256; do
+for SIZE in 16 32 48 64 128 256 512; do
   rsvg-convert -w "$SIZE" -h "$SIZE" "$ROOT/assets/linux/icon.svg" \
     > "$ROOT/assets/linux/${SIZE}x${SIZE}.png"
 done

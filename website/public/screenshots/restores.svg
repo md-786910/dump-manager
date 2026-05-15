@@ -1,0 +1,50 @@
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, ui-monospace, monospace">
+  <rect width="800" height="500" fill="#0d0f13" opacity="0.8"/>
+
+  <!-- Modal -->
+  <rect x="120" y="40" width="560" height="420" rx="10" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+
+  <!-- Modal header -->
+  <rect x="120" y="40" width="560" height="52" rx="10" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <rect x="120" y="72" width="560" height="20" fill="#1a1f27"/>
+  <text x="148" y="72" font-size="13" fill="#e6e9ef" font-weight="700">Restore dump</text>
+  <text x="665" y="72" font-size="16" fill="#6c7484" text-anchor="middle">×</text>
+
+  <!-- Dump picker -->
+  <text x="148" y="116" font-size="10" fill="#6c7484" letter-spacing="1">SELECT DUMP</text>
+  <rect x="148" y="124" width="504" height="36" rx="5" fill="#1a1f27" stroke="#3b82f6" stroke-width="1"/>
+  <text x="164" y="142" font-size="11" fill="#e6e9ef">shop_prod_2026-05-15_14-23.pgc.enc</text>
+  <text x="164" y="154" font-size="9" fill="#6c7484">45.2 MB · Today 14:23 · AES-256-GCM</text>
+  <text x="636" y="146" font-size="10" fill="#6c7484" text-anchor="end">▾</text>
+
+  <!-- Dump metadata -->
+  <rect x="148" y="168" width="504" height="72" rx="5" fill="#0d0f13" stroke="#2a313c" stroke-width="1"/>
+  <text x="164" y="188" font-size="9" fill="#6c7484" letter-spacing="1">DUMP METADATA</text>
+  <text x="164" y="206" font-size="10" fill="#aab2bf">pg_dump 16.2 · custom format (–Fc)</text>
+  <text x="164" y="222" font-size="10" fill="#aab2bf">847 tables · 412 sequences · 23 views</text>
+  <text x="164" y="238" font-size="10" fill="#aab2bf">Uncompressed size: ~2.3 GB</text>
+
+  <!-- Target picker -->
+  <text x="148" y="268" font-size="10" fill="#6c7484" letter-spacing="1">RESTORE TARGET</text>
+  <rect x="148" y="276" width="504" height="36" rx="5" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="164" y="298" font-size="11" fill="#e6e9ef">shop_staging · staging.example.com</text>
+  <text x="636" y="298" font-size="10" fill="#6c7484" text-anchor="end">▾</text>
+
+  <!-- Options -->
+  <rect x="148" y="328" width="504" height="44" rx="5" fill="#1a1f27"/>
+  <!-- Checkbox checked -->
+  <rect x="164" y="340" width="14" height="14" rx="3" fill="#3b82f6"/>
+  <text x="168" y="351" font-size="9" fill="white" font-weight="700">✓</text>
+  <text x="184" y="351" font-size="11" fill="#e6e9ef">CLEAN before restore</text>
+  <text x="184" y="364" font-size="9" fill="#6c7484">Drops all objects in target schema before restoring. Prevents drift.</text>
+
+  <!-- Warning note -->
+  <rect x="148" y="382" width="504" height="28" rx="4" fill="#1a1f27" stroke="#ef4444" stroke-width="1" opacity="0.7"/>
+  <text x="164" y="400" font-size="10" fill="#ef4444">⚠  This will overwrite all data in shop_staging</text>
+
+  <!-- Buttons -->
+  <rect x="148" y="424" width="112" height="28" rx="5" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="204" y="442" font-size="11" fill="#aab2bf" text-anchor="middle">Cancel</text>
+  <rect x="540" y="424" width="112" height="28" rx="5" fill="#3b82f6"/>
+  <text x="596" y="442" font-size="11" fill="white" text-anchor="middle" font-weight="600">Restore now →</text>
+</svg>

@@ -10,48 +10,56 @@ const sections = [
     title: 'The tree view',
     eyebrow: 'Inventory',
     body: 'Servers (LOCAL and VPS, grouped), compose projects, services, databases — all in one sidebar. Click any node to drill in. Search across everything you have access to without leaving the app.',
+    src: '/screenshots/tree.svg',
   },
   {
     id: 'discovery',
     title: 'Automatic discovery',
     eyebrow: 'Zero config',
     body: 'Add a server, hit Discover. Tunnex runs <code>docker compose ls</code>, reads each service\'s image, queries Postgres / Mongo for their databases, and builds the tree. No manual yaml. No "what was the connection string again?"',
+    src: '/screenshots/discovery.svg',
   },
   {
     id: 'backups',
     title: 'Backups, done right',
     eyebrow: 'Dumps',
     body: 'pg_dump custom format (-Fc) and mongodump archives, streamed straight out of the container over SSH. Adjustable compression (-Z 0…9). AES-256-GCM encryption on the fly — the dump never hits disk in cleartext.',
+    src: '/screenshots/backups.svg',
   },
   {
     id: 'restores',
     title: 'Restores you trust',
     eyebrow: 'Recovery',
     body: 'Pick a dump, pick a target database (same one or another), optional CLEAN before restore, preview the dump\'s metadata before clicking go. Tunnex routes the restore through the same SSH channel and shows live progress.',
+    src: '/screenshots/restores.svg',
   },
   {
     id: 'db-viewer',
     title: 'Live DB viewer',
     eyebrow: 'Inspect',
     body: 'Quick read-only browser for Postgres tables and Mongo collections. Paginated. Sortable. For when you just need to answer "is the row there?" without opening a separate IDE or SSH session.',
+    src: '/screenshots/db-viewer.svg',
   },
   {
     id: 'encryption',
     title: 'Encryption model',
     eyebrow: 'Security',
     body: 'A 256-bit AES key is generated on first launch and stored in your OS keychain: Keychain on macOS, DPAPI on Windows, libsecret on Linux. The key is never written to a config file. Dumps are unusable on another machine without the same key — back up the key if you back up the dumps offsite.',
+    src: '/screenshots/encryption.svg',
   },
   {
     id: 'updates',
     title: 'Background auto-updates',
     eyebrow: 'Always current',
     body: 'New version available? Tunnex downloads it in the background, then shows a non-blocking "Restart now / Later" banner. Skip the banner and it installs on next quit. Updates are pulled from the same R2 manifest that signed your install.',
+    src: '/screenshots/updates.svg',
   },
   {
     id: 'cross-platform',
     title: 'One binary, three OSes',
     eyebrow: 'Cross-platform',
     body: 'Native installers for Windows (NSIS with progress, shortcuts, uninstaller), macOS (DMG, x64 + arm64), and Linux (AppImage and .deb). Same workflow, same dump format, same encryption key portable between your machines.',
+    src: '/screenshots/cross-platform.svg',
   },
 ];
 ---
@@ -77,12 +85,7 @@ const sections = [
             Try it →
           </a>
         </div>
-        <ScreenshotFrame alt={s.title}>
-          <div class="text-xs font-mono text-[var(--color-text-faint)] p-12 text-center">
-            <p class="text-[var(--color-text)] text-sm mb-2">{s.title}</p>
-            <p>Place a screenshot at /screenshots/{s.id}.png</p>
-          </div>
-        </ScreenshotFrame>
+        <ScreenshotFrame alt={s.title} src={s.src} />
       </article>
     ))}
   </div>

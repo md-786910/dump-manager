@@ -1,0 +1,126 @@
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, ui-monospace, monospace">
+  <rect width="800" height="500" fill="#0d0f13"/>
+
+  <!-- Top bar -->
+  <rect x="0" y="0" width="800" height="48" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="24" y="20" font-size="9" fill="#6c7484">dev_db · PostgreSQL · Live DB Viewer</text>
+  <text x="24" y="38" font-size="13" fill="#e6e9ef" font-weight="700">users</text>
+  <rect x="688" y="12" width="88" height="26" rx="5" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="732" y="29" font-size="10" fill="#aab2bf" text-anchor="middle">Read-only</text>
+
+  <!-- Table selector tabs -->
+  <rect x="0" y="48" width="800" height="36" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <rect x="16" y="56" width="64" height="20" rx="4" fill="#1a1f27" stroke="#3b82f6" stroke-width="1"/>
+  <text x="48" y="70" font-size="10" fill="#3b82f6" text-anchor="middle">users</text>
+  <text x="100" y="70" font-size="10" fill="#6c7484">posts</text>
+  <text x="148" y="70" font-size="10" fill="#6c7484">sessions</text>
+  <text x="208" y="70" font-size="10" fill="#6c7484">tags</text>
+  <text x="248" y="70" font-size="10" fill="#6c7484">subscriptions</text>
+
+  <!-- Search bar -->
+  <rect x="560" y="56" width="220" height="22" rx="4" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="576" y="71" font-size="10" fill="#6c7484">Filter rows…</text>
+
+  <!-- Grid header -->
+  <rect x="0" y="84" width="800" height="28" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="20" y="102" font-size="10" fill="#6c7484" font-weight="700">id</text>
+  <line x1="72" y1="84" x2="72" y2="500" stroke="#2a313c" stroke-width="1"/>
+  <text x="84" y="102" font-size="10" fill="#6c7484" font-weight="700">email</text>
+  <line x1="284" y1="84" x2="284" y2="500" stroke="#2a313c" stroke-width="1"/>
+  <text x="296" y="102" font-size="10" fill="#6c7484" font-weight="700">name</text>
+  <line x1="464" y1="84" x2="464" y2="500" stroke="#2a313c" stroke-width="1"/>
+  <text x="476" y="102" font-size="10" fill="#6c7484" font-weight="700">role</text>
+  <line x1="560" y1="84" x2="560" y2="500" stroke="#2a313c" stroke-width="1"/>
+  <text x="572" y="102" font-size="10" fill="#6c7484" font-weight="700">created_at</text>
+  <line x1="720" y1="84" x2="720" y2="500" stroke="#2a313c" stroke-width="1"/>
+  <text x="732" y="102" font-size="10" fill="#6c7484" font-weight="700">active</text>
+
+  <!-- Row 1 - highlighted -->
+  <rect x="0" y="112" width="800" height="34" fill="#1a1f27"/>
+  <text x="20" y="133" font-size="10" fill="#aab2bf">1</text>
+  <text x="84" y="133" font-size="10" fill="#e6e9ef">alice@example.com</text>
+  <text x="296" y="133" font-size="10" fill="#e6e9ef">Alice Johnson</text>
+  <text x="476" y="133" font-size="10" fill="#3b82f6">admin</text>
+  <text x="572" y="133" font-size="10" fill="#aab2bf">2024-01-03 09:14</text>
+  <text x="732" y="133" font-size="10" fill="#16a34a">true</text>
+
+  <!-- Row 2 -->
+  <rect x="0" y="146" width="800" height="34" fill="#12151b"/>
+  <text x="20" y="167" font-size="10" fill="#aab2bf">2</text>
+  <text x="84" y="167" font-size="10" fill="#aab2bf">bob@example.com</text>
+  <text x="296" y="167" font-size="10" fill="#aab2bf">Bob Smith</text>
+  <text x="476" y="167" font-size="10" fill="#aab2bf">user</text>
+  <text x="572" y="167" font-size="10" fill="#aab2bf">2024-01-08 11:32</text>
+  <text x="732" y="167" font-size="10" fill="#16a34a">true</text>
+
+  <!-- Row 3 -->
+  <rect x="0" y="180" width="800" height="34" fill="#1a1f27"/>
+  <text x="20" y="201" font-size="10" fill="#aab2bf">3</text>
+  <text x="84" y="201" font-size="10" fill="#aab2bf">carol@example.com</text>
+  <text x="296" y="201" font-size="10" fill="#aab2bf">Carol White</text>
+  <text x="476" y="201" font-size="10" fill="#aab2bf">user</text>
+  <text x="572" y="201" font-size="10" fill="#aab2bf">2024-01-12 14:05</text>
+  <text x="732" y="201" font-size="10" fill="#16a34a">true</text>
+
+  <!-- Row 4 -->
+  <rect x="0" y="214" width="800" height="34" fill="#12151b"/>
+  <text x="20" y="235" font-size="10" fill="#aab2bf">4</text>
+  <text x="84" y="235" font-size="10" fill="#aab2bf">dave@example.com</text>
+  <text x="296" y="235" font-size="10" fill="#aab2bf">Dave Brown</text>
+  <text x="476" y="235" font-size="10" fill="#aab2bf">moderator</text>
+  <text x="572" y="235" font-size="10" fill="#aab2bf">2024-01-20 08:47</text>
+  <text x="732" y="235" font-size="10" fill="#6c7484">false</text>
+
+  <!-- Row 5 -->
+  <rect x="0" y="248" width="800" height="34" fill="#1a1f27"/>
+  <text x="20" y="269" font-size="10" fill="#aab2bf">5</text>
+  <text x="84" y="269" font-size="10" fill="#aab2bf">eve@example.com</text>
+  <text x="296" y="269" font-size="10" fill="#aab2bf">Eve Davis</text>
+  <text x="476" y="269" font-size="10" fill="#aab2bf">user</text>
+  <text x="572" y="269" font-size="10" fill="#aab2bf">2024-02-01 16:22</text>
+  <text x="732" y="269" font-size="10" fill="#16a34a">true</text>
+
+  <!-- Row 6 -->
+  <rect x="0" y="282" width="800" height="34" fill="#12151b"/>
+  <text x="20" y="303" font-size="10" fill="#aab2bf">6</text>
+  <text x="84" y="303" font-size="10" fill="#aab2bf">frank@example.com</text>
+  <text x="296" y="303" font-size="10" fill="#aab2bf">Frank Wilson</text>
+  <text x="476" y="303" font-size="10" fill="#aab2bf">user</text>
+  <text x="572" y="303" font-size="10" fill="#aab2bf">2024-02-09 10:18</text>
+  <text x="732" y="303" font-size="10" fill="#16a34a">true</text>
+
+  <!-- Row 7 -->
+  <rect x="0" y="316" width="800" height="34" fill="#1a1f27"/>
+  <text x="20" y="337" font-size="10" fill="#aab2bf">7</text>
+  <text x="84" y="337" font-size="10" fill="#aab2bf">grace@example.com</text>
+  <text x="296" y="337" font-size="10" fill="#aab2bf">Grace Lee</text>
+  <text x="476" y="337" font-size="10" fill="#aab2bf">user</text>
+  <text x="572" y="337" font-size="10" fill="#aab2bf">2024-02-14 13:55</text>
+  <text x="732" y="337" font-size="10" fill="#16a34a">true</text>
+
+  <!-- Row 8 -->
+  <rect x="0" y="350" width="800" height="34" fill="#12151b"/>
+  <text x="20" y="371" font-size="10" fill="#aab2bf">8</text>
+  <text x="84" y="371" font-size="10" fill="#aab2bf">henry@example.com</text>
+  <text x="296" y="371" font-size="10" fill="#aab2bf">Henry Martin</text>
+  <text x="476" y="371" font-size="10" fill="#aab2bf">user</text>
+  <text x="572" y="371" font-size="10" fill="#aab2bf">2024-02-19 07:40</text>
+  <text x="732" y="371" font-size="10" fill="#6c7484">false</text>
+
+  <!-- Fade bottom rows -->
+  <rect x="0" y="384" width="800" height="80" fill="url(#fadeBottom)"/>
+  <defs>
+    <linearGradient id="fadeBottom" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d0f13" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#0d0f13" stop-opacity="1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Pagination bar -->
+  <rect x="0" y="460" width="800" height="40" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="24" y="484" font-size="10" fill="#6c7484">1,847 rows</text>
+  <text x="328" y="484" font-size="10" fill="#6c7484" text-anchor="middle">‹</text>
+  <text x="380" y="484" font-size="10" fill="#e6e9ef" text-anchor="middle">Page 1 of 74</text>
+  <text x="432" y="484" font-size="10" fill="#aab2bf" text-anchor="middle">›</text>
+  <text x="720" y="484" font-size="10" fill="#6c7484" text-anchor="end">25 rows / page</text>
+</svg>

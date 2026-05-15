@@ -16,6 +16,7 @@ const cases = [
       'Hit Backup before every deploy, or after every meaningful import. That\'s it.',
     ],
     outcome: '<strong>Result:</strong> backups become a 4-second ritual instead of a 40-line bash script you never updated.',
+    src: '/screenshots/solo.svg',
   },
   {
     id: 'agency',
@@ -28,6 +29,7 @@ const cases = [
       'One click backs up everything you\'re about to touch.',
     ],
     outcome: '<strong>Result:</strong> a deploy-day checklist with one item instead of fifteen, and every backup encrypted on your machine the moment it lands.',
+    src: '/screenshots/agency.svg',
   },
   {
     id: 'team',
@@ -40,6 +42,7 @@ const cases = [
       'Optional CLEAN-first wipes the destination database before restore so there\'s no schema drift.',
     ],
     outcome: '<strong>Result:</strong> "refresh staging from prod" is a 30-second self-service action your whole team can do, not a tribal ritual only one person knows.',
+    src: '/screenshots/team.svg',
   },
   {
     id: 'local',
@@ -52,6 +55,7 @@ const cases = [
       'Dumps are tagged by date/time so version-hopping while debugging is trivial.',
     ],
     outcome: '<strong>Result:</strong> your iteration loop gets shorter. Risky migrations stop being scary.',
+    src: '/screenshots/local.svg',
   },
 ];
 ---
@@ -85,12 +89,7 @@ const cases = [
           <p class="text-[var(--color-text)] leading-relaxed" set:html={c.outcome}></p>
         </div>
         <div class="lg:col-span-2 lg:order-2">
-          <ScreenshotFrame alt={c.label}>
-            <div class="text-xs font-mono text-[var(--color-text-faint)] p-10 text-center">
-              <p class="text-[var(--color-text)] text-sm mb-2">{c.label}</p>
-              <p>Place a screenshot at /screenshots/{c.id}.png</p>
-            </div>
-          </ScreenshotFrame>
+          <ScreenshotFrame alt={c.label} src={c.src} />
         </div>
       </article>
     ))}

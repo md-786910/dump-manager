@@ -1,0 +1,77 @@
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, ui-monospace, monospace">
+  <rect width="800" height="500" fill="#0d0f13"/>
+
+  <!-- Title -->
+  <text x="400" y="48" font-size="14" fill="#e6e9ef" font-weight="700" text-anchor="middle">Encryption pipeline</text>
+  <text x="400" y="66" font-size="10" fill="#6c7484" text-anchor="middle">Every dump is encrypted before it touches disk</text>
+
+  <!-- Step 1: Database -->
+  <rect x="48" y="100" width="160" height="120" rx="8" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <!-- DB icon -->
+  <ellipse cx="128" cy="132" rx="44" ry="14" fill="none" stroke="#3b82f6" stroke-width="2"/>
+  <line x1="84" y1="132" x2="84" y2="162" stroke="#3b82f6" stroke-width="2"/>
+  <line x1="172" y1="132" x2="172" y2="162" stroke="#3b82f6" stroke-width="2"/>
+  <ellipse cx="128" cy="162" rx="44" ry="14" fill="none" stroke="#3b82f6" stroke-width="2"/>
+  <text x="128" y="200" font-size="10" fill="#aab2bf" text-anchor="middle">PostgreSQL</text>
+  <text x="128" y="214" font-size="10" fill="#6c7484" text-anchor="middle">live database</text>
+
+  <!-- Arrow 1 -->
+  <line x1="210" y1="160" x2="280" y2="160" stroke="#2a313c" stroke-width="1" stroke-dasharray="4 3"/>
+  <polygon points="280,155 290,160 280,165" fill="#6c7484"/>
+  <text x="250" y="150" font-size="9" fill="#6c7484" text-anchor="middle">pg_dump –Fc</text>
+  <text x="250" y="176" font-size="9" fill="#6c7484" text-anchor="middle">over SSH</text>
+
+  <!-- Step 2: Encrypt -->
+  <rect x="292" y="100" width="216" height="120" rx="8" fill="#12151b" stroke="#3b82f6" stroke-width="1"/>
+  <!-- Lock icon -->
+  <rect x="368" y="140" width="64" height="44" rx="6" fill="none" stroke="#3b82f6" stroke-width="2"/>
+  <path d="M 382 140 L 382 128 A 18 18 0 0 1 418 128 L 418 140" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="400" cy="162" r="6" fill="#3b82f6"/>
+  <text x="400" y="200" font-size="10" fill="#3b82f6" text-anchor="middle" font-weight="600">AES-256-GCM</text>
+  <text x="400" y="214" font-size="9" fill="#6c7484" text-anchor="middle">256-bit key · random nonce</text>
+
+  <!-- Arrow 2 -->
+  <line x1="510" y1="160" x2="580" y2="160" stroke="#2a313c" stroke-width="1" stroke-dasharray="4 3"/>
+  <polygon points="580,155 590,160 580,165" fill="#6c7484"/>
+  <text x="545" y="150" font-size="9" fill="#6c7484" text-anchor="middle">write to</text>
+  <text x="545" y="176" font-size="9" fill="#6c7484" text-anchor="middle">local disk</text>
+
+  <!-- Step 3: Encrypted file -->
+  <rect x="592" y="100" width="160" height="120" rx="8" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <!-- File icon -->
+  <rect x="640" y="120" width="64" height="76" rx="4" fill="none" stroke="#16a34a" stroke-width="2"/>
+  <path d="M 664 120 L 664 140 L 688 140" fill="none" stroke="#16a34a" stroke-width="2"/>
+  <path d="M 688 140 L 688 120 L 664 120" fill="#16a34a" opacity="0.3"/>
+  <text x="660" y="168" font-size="7" fill="#16a34a" text-anchor="middle">.pgc</text>
+  <text x="660" y="180" font-size="7" fill="#16a34a" text-anchor="middle">.enc</text>
+  <text x="672" y="214" font-size="10" fill="#16a34a" text-anchor="middle">encrypted file</text>
+
+  <!-- Key section -->
+  <rect x="48" y="260" width="704" height="100" rx="8" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="400" y="288" font-size="11" fill="#aab2bf" text-anchor="middle" font-weight="600">Encryption key — stored in OS keychain, never written to disk</text>
+
+  <!-- Three OS badges -->
+  <rect x="100" y="300" width="168" height="44" rx="6" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <!-- Apple logo path approximate -->
+  <text x="120" y="328" font-size="18" fill="#e6e9ef"></text>
+  <text x="148" y="320" font-size="11" fill="#e6e9ef" font-weight="600">macOS</text>
+  <text x="148" y="334" font-size="9" fill="#6c7484">Keychain Access</text>
+
+  <rect x="316" y="300" width="168" height="44" rx="6" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="336" y="326" font-size="16" fill="#3b82f6">⊞</text>
+  <text x="360" y="320" font-size="11" fill="#e6e9ef" font-weight="600">Windows</text>
+  <text x="360" y="334" font-size="9" fill="#6c7484">DPAPI</text>
+
+  <rect x="532" y="300" width="168" height="44" rx="6" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="552" y="327" font-size="16" fill="#aab2bf">🐧</text>
+  <text x="576" y="320" font-size="11" fill="#e6e9ef" font-weight="600">Linux</text>
+  <text x="576" y="334" font-size="9" fill="#6c7484">libsecret</text>
+
+  <!-- Bottom note -->
+  <rect x="48" y="380" width="704" height="36" rx="6" fill="#1a1f27" stroke="#ef4444" stroke-width="1" opacity="0.5"/>
+  <text x="400" y="400" font-size="10" fill="#aab2bf" text-anchor="middle">Dumps are unusable on another machine without the same key.</text>
+  <text x="400" y="410" font-size="9" fill="#6c7484" text-anchor="middle"> Back up the key if you store dumps offsite.</text>
+
+  <!-- Key icon small -->
+  <text x="400" y="448" font-size="9" fill="#6c7484" text-anchor="middle">Key generated once on first launch · 256-bit random · never leaves keychain</text>
+</svg>

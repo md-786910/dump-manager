@@ -1,0 +1,74 @@
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, ui-monospace, monospace">
+  <rect width="800" height="500" fill="#0d0f13"/>
+
+  <!-- Header -->
+  <rect x="0" y="0" width="800" height="48" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <rect x="16" y="14" width="52" height="20" rx="10" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="42" y="28" font-size="9" fill="#aab2bf" text-anchor="middle">LOCAL</text>
+  <text x="80" y="22" font-size="9" fill="#6c7484">dev-docker › web-app › postgres</text>
+  <text x="80" y="38" font-size="13" fill="#e6e9ef" font-weight="700">dev_db · PostgreSQL</text>
+  <rect x="692" y="12" width="84" height="26" rx="5" fill="#3b82f6"/>
+  <text x="734" y="29" font-size="10" fill="white" text-anchor="middle" font-weight="600">Backup</text>
+
+  <!-- Quick-backup tip card -->
+  <rect x="24" y="64" width="752" height="40" rx="6" fill="#1a1f27" stroke="#3b82f6" stroke-width="1" opacity="0.7"/>
+  <text x="44" y="82" font-size="10" fill="#3b82f6">💡 Quick-save before risky operations</text>
+  <text x="44" y="96" font-size="9" fill="#6c7484">Hit Backup before running migrations or reset scripts. Restore in seconds if you regret it.</text>
+
+  <!-- Stats row -->
+  <rect x="24" y="120" width="160" height="60" rx="6" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="44" y="142" font-size="9" fill="#6c7484">LAST BACKUP</text>
+  <text x="44" y="160" font-size="13" fill="#e6e9ef">47 min ago</text>
+  <text x="44" y="174" font-size="9" fill="#16a34a">✓ before migration</text>
+
+  <rect x="196" y="120" width="160" height="60" rx="6" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="216" y="142" font-size="9" fill="#6c7484">TODAY</text>
+  <text x="216" y="160" font-size="13" fill="#e6e9ef">3 backups</text>
+  <text x="216" y="174" font-size="9" fill="#6c7484">across 2 databases</text>
+
+  <rect x="368" y="120" width="160" height="60" rx="6" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="388" y="142" font-size="9" fill="#6c7484">TOTAL</text>
+  <text x="388" y="160" font-size="13" fill="#e6e9ef">128 dumps</text>
+  <text x="388" y="174" font-size="9" fill="#6c7484">since project start</text>
+
+  <rect x="540" y="120" width="236" height="60" rx="6" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="560" y="142" font-size="9" fill="#6c7484">ENCRYPTION</text>
+  <text x="560" y="160" font-size="12" fill="#16a34a">AES-256-GCM</text>
+  <text x="560" y="174" font-size="9" fill="#6c7484">Key in macOS Keychain</text>
+
+  <!-- Dump history -->
+  <text x="24" y="208" font-size="9" fill="#6c7484" letter-spacing="1.5">DUMP HISTORY · dev_db</text>
+
+  <!-- Row 1 - latest, highlighted -->
+  <rect x="24" y="216" width="752" height="44" rx="5" fill="#12151b" stroke="#3b82f6" stroke-width="1"/>
+  <rect x="24" y="216" width="3" height="44" rx="1" fill="#3b82f6"/>
+  <text x="44" y="234" font-size="10" fill="#e6e9ef">dev_db_2026-05-15_14-13.pgc.enc</text>
+  <text x="44" y="250" font-size="9" fill="#6c7484">Today 14:13 · 47 MB · before migration v024</text>
+  <text x="760" y="240" font-size="10" fill="#3b82f6" text-anchor="end">Restore</text>
+
+  <!-- Row 2 -->
+  <rect x="24" y="266" width="752" height="44" rx="5" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="44" y="284" font-size="10" fill="#aab2bf">dev_db_2026-05-15_11-07.pgc.enc</text>
+  <text x="44" y="298" font-size="9" fill="#6c7484">Today 11:07 · 46 MB · before import script</text>
+  <text x="760" y="288" font-size="10" fill="#3b82f6" text-anchor="end">Restore</text>
+
+  <!-- Row 3 -->
+  <rect x="24" y="316" width="752" height="44" rx="5" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="44" y="334" font-size="10" fill="#aab2bf">dev_db_2026-05-15_09-30.pgc.enc</text>
+  <text x="44" y="348" font-size="9" fill="#6c7484">Today 09:30 · 45 MB · morning snapshot</text>
+  <text x="760" y="338" font-size="10" fill="#3b82f6" text-anchor="end">Restore</text>
+
+  <!-- Row 4 -->
+  <rect x="24" y="366" width="752" height="44" rx="5" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="44" y="384" font-size="10" fill="#aab2bf">dev_db_2026-05-14_18-30.pgc.enc</text>
+  <text x="44" y="398" font-size="9" fill="#6c7484">Yesterday 18:30 · 44 MB</text>
+  <text x="760" y="388" font-size="10" fill="#3b82f6" text-anchor="end">Restore</text>
+
+  <!-- Row 5 -->
+  <rect x="24" y="416" width="752" height="44" rx="5" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="44" y="434" font-size="10" fill="#aab2bf">dev_db_2026-05-14_14-00.pgc.enc</text>
+  <text x="44" y="448" font-size="9" fill="#6c7484">Yesterday 14:00 · 44 MB</text>
+  <text x="760" y="438" font-size="10" fill="#3b82f6" text-anchor="end">Restore</text>
+
+  <text x="400" y="478" font-size="9" fill="#6c7484" text-anchor="middle">Sorted by date · tagged automatically · restore takes &lt; 30 seconds</text>
+</svg>

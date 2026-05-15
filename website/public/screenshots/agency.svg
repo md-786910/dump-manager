@@ -1,0 +1,105 @@
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, ui-monospace, monospace">
+  <rect width="800" height="500" fill="#0d0f13"/>
+
+  <!-- Sidebar -->
+  <rect x="0" y="0" width="240" height="500" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="16" y="28" font-size="9" fill="#6c7484" letter-spacing="1.5" font-weight="700">SERVERS · VPS</text>
+
+  <!-- Client A -->
+  <rect x="8" y="38" width="224" height="24" rx="4" fill="#1a1f27"/>
+  <circle cx="20" cy="50" r="4" fill="#16a34a"/>
+  <text x="30" y="54" font-size="10" fill="#e6e9ef" font-weight="600">client-a.server.com</text>
+  <line x1="20" y1="62" x2="20" y2="98" stroke="#2a313c" stroke-width="1"/>
+  <line x1="20" y1="72" x2="34" y2="72" stroke="#2a313c" stroke-width="1"/>
+  <text x="38" y="76" font-size="9" fill="#6c7484">▾ acme-app</text>
+  <line x1="20" y1="90" x2="48" y2="90" stroke="#2a313c" stroke-width="1"/>
+  <text x="52" y="94" font-size="9" fill="#3b82f6">acme-prod</text>
+
+  <!-- Client B -->
+  <rect x="8" y="106" width="224" height="24" rx="4" fill="#1a1f27"/>
+  <circle cx="20" cy="118" r="4" fill="#16a34a"/>
+  <text x="30" y="122" font-size="10" fill="#e6e9ef" font-weight="600">client-b.server.com</text>
+  <line x1="20" y1="130" x2="20" y2="182" stroke="#2a313c" stroke-width="1"/>
+  <line x1="20" y1="140" x2="34" y2="140" stroke="#2a313c" stroke-width="1"/>
+  <text x="38" y="144" font-size="9" fill="#6c7484">▾ contoso-web</text>
+  <line x1="20" y1="156" x2="48" y2="156" stroke="#2a313c" stroke-width="1"/>
+  <text x="52" y="160" font-size="9" fill="#3b82f6">contoso-prod</text>
+  <line x1="20" y1="172" x2="48" y2="172" stroke="#2a313c" stroke-width="1"/>
+  <text x="52" y="176" font-size="9" fill="#aab2bf">contoso-staging</text>
+
+  <!-- Client C -->
+  <rect x="8" y="190" width="224" height="24" rx="4" fill="#1a1f27"/>
+  <circle cx="20" cy="202" r="4" fill="#16a34a"/>
+  <text x="30" y="206" font-size="10" fill="#e6e9ef" font-weight="600">client-c.server.com</text>
+  <line x1="20" y1="214" x2="20" y2="250" stroke="#2a313c" stroke-width="1"/>
+  <line x1="20" y1="224" x2="34" y2="224" stroke="#2a313c" stroke-width="1"/>
+  <text x="38" y="228" font-size="9" fill="#6c7484">▾ startup-api</text>
+  <line x1="20" y1="244" x2="48" y2="244" stroke="#2a313c" stroke-width="1"/>
+  <text x="52" y="248" font-size="9" fill="#3b82f6">startup-prod</text>
+
+  <!-- Client D -->
+  <rect x="8" y="258" width="224" height="24" rx="4" fill="#1a1f27"/>
+  <circle cx="20" cy="270" r="4" fill="#16a34a"/>
+  <text x="30" y="274" font-size="10" fill="#e6e9ef" font-weight="600">client-d.server.com</text>
+  <line x1="20" y1="282" x2="20" y2="318" stroke="#2a313c" stroke-width="1"/>
+  <line x1="20" y1="292" x2="34" y2="292" stroke="#2a313c" stroke-width="1"/>
+  <text x="38" y="296" font-size="9" fill="#6c7484">▾ e-commerce</text>
+  <line x1="20" y1="312" x2="48" y2="312" stroke="#2a313c" stroke-width="1"/>
+  <text x="52" y="316" font-size="9" fill="#3b82f6">shop-prod</text>
+
+  <!-- Client E -->
+  <rect x="8" y="326" width="224" height="24" rx="4" fill="#1a1f27"/>
+  <circle cx="20" cy="338" r="4" fill="#6c7484"/>
+  <text x="30" y="342" font-size="10" fill="#aab2bf" font-weight="600">client-e.server.com</text>
+  <line x1="20" y1="350" x2="20" y2="370" stroke="#2a313c" stroke-width="1"/>
+  <line x1="20" y1="360" x2="34" y2="360" stroke="#2a313c" stroke-width="1"/>
+  <text x="38" y="364" font-size="9" fill="#6c7484">▸ portfolio</text>
+
+  <!-- Count badge -->
+  <rect x="16" y="410" width="208" height="32" rx="6" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="120" y="430" font-size="10" fill="#6c7484" text-anchor="middle">10 servers · 18 targets total</text>
+
+  <!-- Main panel -->
+  <rect x="241" y="0" width="559" height="500" fill="#0d0f13"/>
+  <rect x="241" y="0" width="559" height="48" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="260" y="20" font-size="9" fill="#6c7484">client-b.server.com › contoso-web › postgres</text>
+  <text x="260" y="38" font-size="13" fill="#e6e9ef" font-weight="700">contoso-prod · PostgreSQL</text>
+  <rect x="700" y="12" width="84" height="26" rx="5" fill="#3b82f6"/>
+  <text x="742" y="29" font-size="10" fill="white" text-anchor="middle" font-weight="600">Backup</text>
+
+  <!-- Stats -->
+  <rect x="260" y="64" width="520" height="60" rx="6" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="296" y="88" font-size="9" fill="#6c7484">LAST BACKUP</text>
+  <text x="296" y="106" font-size="12" fill="#e6e9ef">3 days ago</text>
+  <line x1="420" y1="72" x2="420" y2="118" stroke="#2a313c" stroke-width="1"/>
+  <text x="456" y="88" font-size="9" fill="#6c7484">DUMP COUNT</text>
+  <text x="456" y="106" font-size="12" fill="#e6e9ef">31 dumps</text>
+  <line x1="580" y1="72" x2="580" y2="118" stroke="#2a313c" stroke-width="1"/>
+  <text x="616" y="88" font-size="9" fill="#6c7484">SIZE</text>
+  <text x="616" y="106" font-size="12" fill="#e6e9ef">2.1 GB</text>
+
+  <!-- Dump list -->
+  <text x="260" y="152" font-size="9" fill="#6c7484" letter-spacing="1.5">RECENT DUMPS</text>
+  <rect x="260" y="160" width="520" height="40" rx="5" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="278" y="179" font-size="10" fill="#e6e9ef">contoso-prod_2026-05-12_22-00.pgc.enc</text>
+  <text x="278" y="193" font-size="9" fill="#6c7484">212 MB · 3 days ago · pre-deploy</text>
+  <text x="770" y="184" font-size="10" fill="#3b82f6" text-anchor="end">Restore</text>
+
+  <rect x="260" y="206" width="520" height="40" rx="5" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="278" y="225" font-size="10" fill="#aab2bf">contoso-prod_2026-05-10_09-15.pgc.enc</text>
+  <text x="278" y="239" font-size="9" fill="#6c7484">209 MB · 5 days ago</text>
+  <text x="770" y="230" font-size="10" fill="#3b82f6" text-anchor="end">Restore</text>
+
+  <!-- Activity log -->
+  <text x="260" y="276" font-size="9" fill="#6c7484" letter-spacing="1.5">AUDIT LOG</text>
+  <rect x="260" y="284" width="520" height="188" rx="6" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="278" y="308" font-size="10" fill="#16a34a">✓  acme-prod backup complete · 45 MB · alice@agency</text>
+  <text x="278" y="326" font-size="10" fill="#16a34a">✓  contoso-staging restore complete · bob@agency</text>
+  <text x="278" y="344" font-size="10" fill="#aab2bf">→  startup-prod backup started · carol@agency</text>
+  <text x="278" y="362" font-size="10" fill="#16a34a">✓  shop-prod backup complete · 512 MB</text>
+  <text x="278" y="380" font-size="10" fill="#16a34a">✓  contoso-prod backup complete · 212 MB</text>
+  <text x="278" y="398" font-size="10" fill="#16a34a">✓  acme-prod backup complete · 44 MB</text>
+  <text x="278" y="416" font-size="10" fill="#16a34a">✓  portfolio backup complete · 8 MB</text>
+  <text x="278" y="434" font-size="10" fill="#6c7484">— 5 days of activity · 23 events</text>
+  <text x="278" y="464" font-size="9" fill="#6c7484">All backups encrypted · AES-256-GCM · stored locally</text>
+</svg>

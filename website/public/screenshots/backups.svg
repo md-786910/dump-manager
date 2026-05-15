@@ -1,0 +1,58 @@
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, ui-monospace, monospace">
+  <rect width="800" height="500" fill="#0d0f13"/>
+
+  <!-- Top bar -->
+  <rect x="0" y="0" width="800" height="52" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="24" y="20" font-size="9" fill="#6c7484">prod.example.com › shop › postgres</text>
+  <text x="24" y="38" font-size="14" fill="#e6e9ef" font-weight="700">shop_prod · PostgreSQL</text>
+  <!-- Backup button active -->
+  <rect x="692" y="12" width="88" height="28" rx="5" fill="#3b82f6" opacity="0.6"/>
+  <text x="736" y="30" font-size="11" fill="white" text-anchor="middle">Backup</text>
+
+  <!-- Status card -->
+  <rect x="24" y="72" width="752" height="120" rx="8" fill="#12151b" stroke="#3b82f6" stroke-width="1"/>
+  <!-- Blue glow top -->
+  <rect x="24" y="72" width="752" height="3" rx="2" fill="#3b82f6" opacity="0.6"/>
+
+  <circle cx="52" cy="104" r="6" fill="#3b82f6" opacity="0.9"/>
+  <text x="68" y="108" font-size="13" fill="#e6e9ef" font-weight="700">Backup in progress</text>
+  <text x="68" y="126" font-size="10" fill="#6c7484">Streaming pg_dump –Fc –Z 6 over SSH · AES-256-GCM encrypting on the fly</text>
+
+  <!-- Progress bar -->
+  <rect x="44" y="144" width="712" height="10" rx="5" fill="#1a1f27"/>
+  <rect x="44" y="144" width="554" height="10" rx="5" fill="#3b82f6"/>
+  <text x="44" y="170" font-size="10" fill="#aab2bf">78%</text>
+  <text x="756" y="170" font-size="10" fill="#6c7484" text-anchor="end">12.4 MB received · ~4s remaining</text>
+
+  <!-- Stats row -->
+  <rect x="24" y="208" width="230" height="72" rx="6" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="44" y="230" font-size="9" fill="#6c7484" letter-spacing="1">TRANSFERRED</text>
+  <text x="44" y="254" font-size="20" fill="#e6e9ef" font-weight="700">12.4 MB</text>
+  <text x="44" y="270" font-size="9" fill="#6c7484">of ~16 MB estimated</text>
+
+  <rect x="264" y="208" width="230" height="72" rx="6" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="284" y="230" font-size="9" fill="#6c7484" letter-spacing="1">ELAPSED</text>
+  <text x="284" y="254" font-size="20" fill="#e6e9ef" font-weight="700">00:14</text>
+  <text x="284" y="270" font-size="9" fill="#6c7484">~4s remaining</text>
+
+  <rect x="504" y="208" width="272" height="72" rx="6" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="524" y="230" font-size="9" fill="#6c7484" letter-spacing="1">ENCRYPTION</text>
+  <text x="524" y="254" font-size="13" fill="#16a34a" font-weight="600">AES-256-GCM</text>
+  <text x="524" y="270" font-size="9" fill="#6c7484">Key from OS keychain · never on disk</text>
+
+  <!-- Live log -->
+  <text x="24" y="308" font-size="9" fill="#6c7484" letter-spacing="1.5">LIVE OUTPUT</text>
+  <rect x="24" y="316" width="752" height="152" rx="6" fill="#0d0f13" stroke="#2a313c" stroke-width="1"/>
+
+  <text x="44" y="340" font-size="10" fill="#16a34a">✓  SSH tunnel open · 22ms latency</text>
+  <text x="44" y="358" font-size="10" fill="#16a34a">✓  exec docker exec shop-postgres-1 pg_dump –Fc –Z 6 shop_prod</text>
+  <text x="44" y="376" font-size="10" fill="#aab2bf">→  chunk 1/? · 4096 KB written</text>
+  <text x="44" y="394" font-size="10" fill="#aab2bf">→  chunk 2/? · 4096 KB written</text>
+  <text x="44" y="412" font-size="10" fill="#aab2bf">→  chunk 3/? · 4096 KB written</text>
+  <text x="44" y="430" font-size="10" fill="#3b82f6">→  encrypting stream · nonce generated</text>
+  <text x="44" y="448" font-size="10" fill="#3b82f6">→  writing to ~/Backups/shop_prod_2026-05-15.pgc.enc</text>
+
+  <!-- Cancel button -->
+  <rect x="660" y="460" width="116" height="28" rx="5" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="718" y="478" font-size="11" fill="#aab2bf" text-anchor="middle">Cancel</text>
+</svg>

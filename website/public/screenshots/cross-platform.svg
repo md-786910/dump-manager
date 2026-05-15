@@ -1,0 +1,72 @@
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, ui-monospace, monospace">
+  <rect width="800" height="500" fill="#0d0f13"/>
+
+  <!-- Title -->
+  <text x="400" y="44" font-size="13" fill="#e6e9ef" font-weight="700" text-anchor="middle">One app. Three operating systems. Same workflow.</text>
+
+  <!-- macOS card -->
+  <rect x="32" y="70" width="220" height="280" rx="10" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <!-- Apple logo approximation -->
+  <text x="142" y="136" font-size="52" fill="#e6e9ef" text-anchor="middle" opacity="0.85"></text>
+  <text x="142" y="170" font-size="16" fill="#e6e9ef" font-weight="700" text-anchor="middle">macOS</text>
+  <line x1="60" y1="184" x2="224" y2="184" stroke="#2a313c" stroke-width="1"/>
+  <text x="142" y="208" font-size="10" fill="#aab2bf" text-anchor="middle">DMG installer</text>
+  <text x="142" y="226" font-size="10" fill="#aab2bf" text-anchor="middle">Intel x64 + Apple Silicon</text>
+  <text x="142" y="244" font-size="10" fill="#aab2bf" text-anchor="middle">arm64</text>
+  <rect x="60" y="290" width="144" height="28" rx="5" fill="#3b82f6"/>
+  <text x="132" y="308" font-size="10" fill="white" text-anchor="middle" font-weight="600">Download .dmg</text>
+  <text x="142" y="334" font-size="9" fill="#6c7484" text-anchor="middle">macOS 12+</text>
+
+  <!-- Windows card -->
+  <rect x="290" y="70" width="220" height="280" rx="10" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <!-- Windows grid logo -->
+  <rect x="376" y="96" width="28" height="28" rx="2" fill="#3b82f6"/>
+  <rect x="408" y="96" width="28" height="28" rx="2" fill="#3b82f6"/>
+  <rect x="376" y="128" width="28" height="28" rx="2" fill="#3b82f6"/>
+  <rect x="408" y="128" width="28" height="28" rx="2" fill="#3b82f6"/>
+  <text x="400" y="178" font-size="16" fill="#e6e9ef" font-weight="700" text-anchor="middle">Windows</text>
+  <line x1="318" y1="192" x2="482" y2="192" stroke="#2a313c" stroke-width="1"/>
+  <text x="400" y="216" font-size="10" fill="#aab2bf" text-anchor="middle">NSIS installer</text>
+  <text x="400" y="234" font-size="10" fill="#aab2bf" text-anchor="middle">x64 (WSL support included)</text>
+  <text x="400" y="252" font-size="10" fill="#aab2bf" text-anchor="middle">Shortcuts + auto-uninstall</text>
+  <rect x="318" y="290" width="164" height="28" rx="5" fill="#3b82f6"/>
+  <text x="400" y="308" font-size="10" fill="white" text-anchor="middle" font-weight="600">Download .exe</text>
+  <text x="400" y="334" font-size="9" fill="#6c7484" text-anchor="middle">Windows 10+</text>
+
+  <!-- Linux card -->
+  <rect x="548" y="70" width="220" height="280" rx="10" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <!-- Linux penguin text -->
+  <text x="658" y="150" font-size="52" fill="#aab2bf" text-anchor="middle">🐧</text>
+  <text x="658" y="178" font-size="16" fill="#e6e9ef" font-weight="700" text-anchor="middle">Linux</text>
+  <line x1="576" y1="192" x2="740" y2="192" stroke="#2a313c" stroke-width="1"/>
+  <text x="658" y="216" font-size="10" fill="#aab2bf" text-anchor="middle">AppImage · .deb</text>
+  <text x="658" y="234" font-size="10" fill="#aab2bf" text-anchor="middle">x64 · arm64</text>
+  <text x="658" y="252" font-size="10" fill="#aab2bf" text-anchor="middle">Ubuntu, Debian, Fedora</text>
+  <rect x="576" y="282" width="76" height="28" rx="5" fill="#3b82f6"/>
+  <text x="614" y="300" font-size="9" fill="white" text-anchor="middle" font-weight="600">AppImage</text>
+  <rect x="660" y="282" width="64" height="28" rx="5" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="692" y="300" font-size="9" fill="#aab2bf" text-anchor="middle">.deb</text>
+  <text x="658" y="334" font-size="9" fill="#6c7484" text-anchor="middle">Linux 5.4+ (glibc 2.31+)</text>
+
+  <!-- Common features row -->
+  <rect x="32" y="376" width="736" height="96" rx="8" fill="#12151b" stroke="#2a313c" stroke-width="1"/>
+  <text x="400" y="402" font-size="10" fill="#6c7484" text-anchor="middle" letter-spacing="1">SAME ACROSS ALL PLATFORMS</text>
+
+  <!-- Feature pills -->
+  <rect x="60" y="416" width="140" height="24" rx="12" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="130" y="432" font-size="10" fill="#aab2bf" text-anchor="middle">Same dump format</text>
+
+  <rect x="212" y="416" width="148" height="24" rx="12" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="286" y="432" font-size="10" fill="#aab2bf" text-anchor="middle">Same encryption key</text>
+
+  <rect x="372" y="416" width="136" height="24" rx="12" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="440" y="432" font-size="10" fill="#aab2bf" text-anchor="middle">Auto-update on all</text>
+
+  <rect x="520" y="416" width="124" height="24" rx="12" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="582" y="432" font-size="10" fill="#aab2bf" text-anchor="middle">Same SSH engine</text>
+
+  <rect x="656" y="416" width="100" height="24" rx="12" fill="#1a1f27" stroke="#2a313c" stroke-width="1"/>
+  <text x="706" y="432" font-size="10" fill="#aab2bf" text-anchor="middle">Free during beta</text>
+
+  <text x="400" y="460" font-size="9" fill="#6c7484" text-anchor="middle">Portable backups — move dumps between machines without re-encrypting</text>
+</svg>

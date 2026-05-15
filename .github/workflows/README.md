@@ -28,7 +28,7 @@ In **GitHub → repo → Settings → Secrets and variables → Actions → New 
 | `R2_ACCESS_KEY_ID` | 32-char hex | Cloudflare R2 → Manage R2 API Tokens |
 | `R2_SECRET_ACCESS_KEY` | 64-char hex | Cloudflare R2 → Manage R2 API Tokens |
 | `R2_ENDPOINT` | `https://<account-id>.r2.cloudflarestorage.com` | R2 token page |
-| `R2_BUCKET` | `dbmanager-releases` (or your bucket name) | R2 bucket |
+| `R2_BUCKET` | `tunnex-releases` (or your bucket name) | R2 bucket |
 | `CF_PAGES_DEPLOY_HOOK` | Full URL | Cloudflare Pages → project → Settings → Builds & deployments → Deploy hooks |
 
 Token permissions: **Object Read & Write** on the release bucket only.

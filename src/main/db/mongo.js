@@ -135,14 +135,14 @@ function mongoQueryCollectionCommand({ composeBin, sudo, projectName, composePro
 // External-URI variants for View DB.
 function mongoUriListCollectionsCommand({ dbName, shell }) {
   const sh = shell || 'mongosh';
-  return sh + ' "$MONGOURI" --quiet --eval ' + shQuote("JSON.stringify(db.getCollectionNames())");
+  return sh + ' "$MONGOURI" --db ' + shQuote(dbName) + ' --quiet --eval ' + shQuote("JSON.stringify(db.getCollectionNames())");
 }
 
-function mongoUriQueryCollectionCommand({ collection, offset, shell }) {
+function mongoUriQueryCollectionCommand({ dbName, collection, offset, shell }) {
   const sh = shell || 'mongosh';
   const n = (offset | 0);
   const evalExpr = "JSON.stringify(db[" + shQuote(collection) + "].find().skip(" + n + ").limit(51).toArray())";
-  return sh + ' "$MONGOURI" --quiet --eval ' + shQuote(evalExpr);
+  return sh + ' "$MONGOURI" --db ' + shQuote(dbName) + ' --quiet --eval ' + shQuote(evalExpr);
 }
 
 // --- Parsers ---

@@ -84,6 +84,15 @@ const state = {
   $('btnDeleteTarget').addEventListener('click', onDeleteTarget);
   $('btnBackupNow').addEventListener('click', onBackupNow);
   $('btnViewDb').addEventListener('click', onViewDb);
+  $('uriRevealBtn').addEventListener('click', () => {
+    const inp = $('uriInput');
+    const revealing = inp.type === 'password';
+    inp.type = revealing ? 'text' : 'password';
+    const icon = $('uriEyeIcon');
+    icon.innerHTML = revealing
+      ? '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+      : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  });
   $('viewDbModalClose').addEventListener('click', closeViewDbModal);
   $('viewDbPrev').addEventListener('click', () => viewDbChangePage(-1));
   $('viewDbDocPrev').addEventListener('click', () => viewDbChangePage(-1));
@@ -299,9 +308,15 @@ function renderServerTree() {
   }
 
   if (standalone.length) {
-    parts.push('<div class="tree__server"><div class="tree__server-row">' +
-      '<span class="tree__caret">▾</span><span class="tree__server-name">Standalone</span>' +
-      '<span class="tree__server-meta mono">' + standalone.length + '</span></div>');
+    parts.push(
+      '<div class="tree__server">' +
+      '<div class="tree__server-row">' +
+        '<span class="tree__caret">▾</span>' +
+        '<span></span>' +
+        '<span class="tree__server-info"><span class="tree__server-name">Standalone</span></span>' +
+        '<span class="tree__server-meta mono">' + standalone.length + '</span>' +
+      '</div>'
+    );
     for (const t of standalone) parts.push(targetRow(t));
     parts.push('</div>');
   }
@@ -374,6 +389,7 @@ function renderMainPanel() {
   const tag = $('pvTag');
   tag.textContent = t.envTag;
   tag.className = 'tag tag--' + t.envTag;
+  $('btnViewDb').textContent = t.engine === 'mongo' ? 'View Collections' : 'View DB';
 
   const server = selectedServer();
   let kindLabel;
@@ -730,6 +746,9 @@ function openTargetModal(existing, defaults) {
   const form = $('targetForm');
   form.reset();
   $('targetFormError').hidden = true;
+  // Always start with URI hidden when modal opens
+  $('uriInput').type = 'password';
+  $('uriEyeIcon').innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
   $('targetModalTitle').textContent = existing ? 'Edit target' : 'New target';
 
   // Populate server pickers (docker-compose and installed share the same server list).
@@ -767,6 +786,10 @@ function openTargetModal(existing, defaults) {
       form.elements.installed_dbUser.value = ins.dbUser || '';
       form.elements.installed_mongoAuthDb.value = ins.mongoAuthDb || 'admin';
       // dbPassword never pre-filled
+    } else if (existing.kind === 'external-uri' && existing.hasUri) {
+      window.dbm.targets.getUri(existing.id).then((res) => {
+        if (res.ok && res.uri) $('uriInput').value = res.uri;
+      }).catch(() => {});
     }
   } else {
     selectKind((defaults && defaults.kind) || 'docker-compose-vps');

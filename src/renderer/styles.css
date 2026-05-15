@@ -135,14 +135,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px 8px;
+  padding: 10px 12px 6px;
 }
 .panel__title {
-  font-size: var(--fs-meta);
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.7px;
   color: var(--text-faint);
   font-weight: 600;
+  opacity: 0.7;
 }
 
 /* Buttons */
@@ -437,30 +438,31 @@ body[data-dev-mock="1"]::after {
 .tree {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 6px 12px;
+  padding: 4px 6px 10px;
 }
-.tree__server { padding: 4px 0; }
-.tree__server + .tree__server { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
+.tree__server { padding: 3px 0; }
+.tree__server + .tree__server { border-top: 1px solid var(--border); padding-top: 6px; margin-top: 3px; }
 
 .tree__section {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-faint);
-  padding: 10px 8px 4px;
+  padding: 8px 8px 2px;
+  opacity: 0.6;
   user-select: none;
 }
 .tree__section:first-child { padding-top: 4px; }
 /* The first server inside a section shouldn't get the inter-server top border */
-.tree__section + .tree__server { border-top: none; padding-top: 4px; margin-top: 0; }
+.tree__section + .tree__server { border-top: none; padding-top: 3px; margin-top: 0; }
 
 .tree__server-row {
   display: grid;
-  grid-template-columns: 14px 20px 1fr auto auto auto;
+  grid-template-columns: 14px 18px 1fr auto auto;
   align-items: center;
-  gap: 8px;
-  padding: 5px 6px;
+  gap: 6px;
+  padding: 5px 8px;
   border-radius: var(--r-md);
   cursor: pointer;
   color: var(--text);
@@ -470,7 +472,7 @@ body[data-dev-mock="1"]::after {
 /* Server kind icon */
 .tree__server-icon {
   display: flex; align-items: center; justify-content: center;
-  align-self: start; padding-top: 3px;
+  align-self: start; padding-top: 2px;
 }
 .tree__server-icon--local { color: var(--accent); }
 .tree__server-icon--ssh { color: var(--text-faint); }
@@ -478,42 +480,43 @@ body[data-dev-mock="1"]::after {
 
 /* Server name + subtitle block */
 .tree__server-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.tree__server-name { font-size: var(--fs-body); font-weight: 500; }
+.tree__server-name { font-size: var(--fs-body); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tree__server-sub {
   font-size: var(--fs-meta);
   color: var(--text-faint);
   font-family: var(--font-mono);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.tree__server-sub--local { color: rgba(59,130,246,0.65); }
-.tree__server-sub--on { color: rgba(22,163,74,0.75); }
+.tree__server-sub--local { color: rgba(59,130,246,0.55); }
+.tree__server-sub--on { color: rgba(22,163,74,0.65); }
 
-/* Kind badge pill */
+/* Kind badge pill — only shown for SSH servers (local is already obvious from icon) */
 .tree__badge {
   align-self: center;
-  font-size: 9px; font-weight: 700; letter-spacing: .06em;
+  font-size: 9px; font-weight: 600; letter-spacing: .04em;
   text-transform: uppercase;
   padding: 1px 5px; border-radius: 999px; white-space: nowrap;
 }
-.tree__badge--local { background: rgba(59,130,246,.15); color: var(--accent); }
+.tree__badge--local { display: none; }
 .tree__badge--ssh { background: var(--bg-elev-3); color: var(--text-faint); }
-.tree__badge--ssh-on { background: rgba(22,163,74,.15); color: var(--success); }
+.tree__badge--ssh-on { background: rgba(22,163,74,.12); color: var(--success); }
 
 /* Left accent line for local servers */
-.tree__server--local { border-left: 2px solid rgba(59,130,246,.35); padding-left: 2px; }
+.tree__server--local { border-left: 2px solid rgba(59,130,246,.3); padding-left: 2px; }
 
 .iconbtn--accent { color: var(--accent); }
 .iconbtn--accent:hover { background: rgba(59, 130, 246, 0.15); color: var(--accent); }
 .tree__server-row:hover { background: var(--bg-elev-2); }
-.tree__caret { color: var(--text-faint); font-size: 10px; }
+.tree__caret { color: var(--text-faint); font-size: 9px; flex-shrink: 0; }
 .tree__server-meta {
   color: var(--text-faint);
-  font-size: var(--fs-meta);
+  font-size: 9px;
   background: var(--bg-elev-3);
-  padding: 1px 6px;
+  padding: 1px 5px;
   border-radius: 999px;
-  min-width: 18px;
+  min-width: 16px;
   text-align: center;
+  opacity: 0.8;
 }
 /* Actions overlay the badge+meta area on hover so the row stays compact when
    idle. Pointer events disabled when hidden so they don't intercept clicks. */
@@ -535,7 +538,7 @@ body[data-dev-mock="1"]::after {
   opacity: 1;
   pointer-events: auto;
 }
-/* When actions are shown, fade the badge+meta so they don't bleed through */
+/* When actions are shown, hide badge+meta so they don't bleed through */
 .tree__server-row:hover .tree__badge,
 .tree__server-row:hover .tree__server-meta { opacity: 0; }
 
@@ -544,11 +547,10 @@ body[data-dev-mock="1"]::after {
 }
 
 .tree__target {
-  display: grid;
-  grid-template-columns: 10px 1fr auto;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 10px 5px 22px;
+  gap: 6px;
+  padding: 4px 8px 4px 22px;
   border-radius: var(--r-md);
   cursor: pointer;
   color: var(--text);
@@ -556,24 +558,27 @@ body[data-dev-mock="1"]::after {
 }
 .tree__target:hover { background: var(--bg-elev-2); }
 .tree__target--selected { background: var(--bg-elev-2); box-shadow: inset 2px 0 0 var(--accent); }
-.tree__target-name { font-size: var(--fs-secondary); }
-.tree__target-tag { font-size: 10px !important; }
-.tree__dot { width: 6px; height: 6px; border-radius: 50%; background: transparent; }
+.tree__target-name { font-size: var(--fs-secondary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree__target-tag { font-size: 9px !important; flex-shrink: 0; }
+/* Only show the dot for prod environments — non-prod dots add visual noise */
+.tree__dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.tree__dot:not(.tree__dot--prod) { display: none; }
 .tree__dot--prod { background: var(--danger); }
 .tree__empty {
   font-size: var(--fs-meta);
   color: var(--text-faint);
-  padding: 5px 10px 5px 22px;
+  padding: 4px 8px 4px 22px;
   font-style: italic;
+  opacity: 0.7;
 }
 
 .panel__foot {
   display: flex;
   gap: 6px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-top: 1px solid var(--border);
 }
-.panel__foot .btn { flex: 1; }
+.panel__foot .btn { flex: 1; font-size: var(--fs-meta); }
 
 /* Profile view */
 .profile-view {
@@ -826,6 +831,26 @@ body[data-dev-mock="1"]::after {
 }
 .form__input-row > .input { flex: 1; min-width: 0; }
 .form__input-row > .btn { flex: none; white-space: nowrap; }
+
+.input-reveal { position: relative; display: flex; }
+.input-reveal .input { flex: 1; padding-right: 34px; }
+.input-reveal__btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-faint);
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-sm);
+  line-height: 0;
+  transition: color var(--t-fast);
+}
+.input-reveal__btn:hover { color: var(--text-muted); }
 
 .input {
   background: var(--bg);

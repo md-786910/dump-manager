@@ -2,8 +2,8 @@
 
 // Run a shell command via the unified channel (SSH or local) and collect
 // stdout/stderr/exit into a single resolved object.
-async function runCommand(ch, command) {
-  const stream = await ch.exec(command);
+async function runCommand(ch, command, env) {
+  const stream = await ch.exec(command, env ? { env } : undefined);
   return new Promise((resolve, reject) => {
     let stdout = '';
     let stderr = '';

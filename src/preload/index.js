@@ -6,7 +6,7 @@ const INVOKE_CHANNELS = new Set([
   'app:ping',
   'servers:list', 'servers:create', 'servers:update', 'servers:delete',
   'targets:list', 'targets:create', 'targets:createMany', 'targets:update', 'targets:delete',
-  'targets:listByServer', 'targets:existingDbsForServer',
+  'targets:listByServer', 'targets:existingDbsForServer', 'targets:getUri',
   'dumps:list', 'dumps:delete', 'dumps:download',
   'audit:tail',
   'hosts:list', 'hosts:revoke',
@@ -62,6 +62,7 @@ contextBridge.exposeInMainWorld('dbm', {
     remove: (id) => invoke('targets:delete', id),
     listByServer: (serverId) => invoke('targets:listByServer', serverId),
     existingDbsForServer: (serverId) => invoke('targets:existingDbsForServer', serverId),
+    getUri: (id) => invoke('targets:getUri', id),
   },
   dumps: {
     list: () => invoke('dumps:list'),

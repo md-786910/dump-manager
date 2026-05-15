@@ -10,6 +10,14 @@ function register({ targets }) {
   ipcMain.handle('targets:delete', (_e, id) => { targets.remove(id); return { ok: true }; });
   ipcMain.handle('targets:listByServer', (_e, serverId) => targets.listByServer(serverId));
   ipcMain.handle('targets:existingDbsForServer', (_e, serverId) => targets.existingDbsForServer(serverId));
+  ipcMain.handle('targets:getUri', (_e, id) => {
+    try {
+      const t = targets._getDecrypted(id);
+      return { ok: true, uri: t.uri || null };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
 }
 
 module.exports = { register };

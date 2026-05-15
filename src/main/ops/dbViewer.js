@@ -6,9 +6,10 @@ const runCommand = require('../exec/runCommand');
 const { resolveDockerSudo } = require('../exec/dockerSudo');
 
 async function listTables(ch, target, server) {
-  let cmd;
+  let cmd, env;
   if (target.kind === 'external-uri') {
     cmd = pg.psqlUriListTablesCommand();
+    env = { PGURI: target.uri };
   } else {
     const v = target.vps || {};
     const sudo = await resolveDockerSudo(ch, server);
@@ -22,7 +23,7 @@ async function listTables(ch, target, server) {
       dbName: target.dbName,
     });
   }
-  const { stdout, stderr, exitCode } = await runCommand(ch, cmd);
+  const { stdout, stderr, exitCode } = await runCommand(ch, cmd, env);
   if (exitCode !== 0) {
     const msg = (stderr || stdout || 'psql exited ' + exitCode).trim();
     throw Object.assign(new Error(msg), { code: 'PSQL_ERROR' });
@@ -31,9 +32,10 @@ async function listTables(ch, target, server) {
 }
 
 async function queryTable(ch, target, { schema, table, offset }, server) {
-  let cmd;
+  let cmd, env;
   if (target.kind === 'external-uri') {
     cmd = pg.psqlUriQueryTableCommand({ schema, table, offset });
+    env = { PGURI: target.uri };
   } else {
     const v = target.vps || {};
     const sudo = await resolveDockerSudo(ch, server);
@@ -50,7 +52,7 @@ async function queryTable(ch, target, { schema, table, offset }, server) {
       offset: offset || 0,
     });
   }
-  const { stdout, stderr, exitCode } = await runCommand(ch, cmd);
+  const { stdout, stderr, exitCode } = await runCommand(ch, cmd, env);
   if (exitCode !== 0) {
     const msg = (stderr || stdout || 'psql exited ' + exitCode).trim();
     throw Object.assign(new Error(msg), { code: 'PSQL_ERROR' });
@@ -99,14 +101,15 @@ function _mongoVpsOpts(target, sudo) {
 }
 
 async function listCollections(ch, target, server) {
-  let cmd;
+  let cmd, env;
   if (target.kind === 'external-uri') {
     cmd = mg.mongoUriListCollectionsCommand({ dbName: target.dbName });
+    env = { MONGOURI: target.uri };
   } else {
     const sudo = await resolveDockerSudo(ch, server);
     cmd = mg.mongoListCollectionsCommand(_mongoVpsOpts(target, sudo));
   }
-  const { stdout, stderr, exitCode } = await runCommand(ch, cmd);
+  const { stdout, stderr, exitCode } = await runCommand(ch, cmd, env);
   if (exitCode !== 0) {
     const msg = (stderr || stdout || 'mongosh exited ' + exitCode).trim();
     throw Object.assign(new Error(msg), { code: 'MONGO_ERROR' });
@@ -115,14 +118,15 @@ async function listCollections(ch, target, server) {
 }
 
 async function queryCollection(ch, target, { collection, offset }, server) {
-  let cmd;
+  let cmd, env;
   if (target.kind === 'external-uri') {
-    cmd = mg.mongoUriQueryCollectionCommand({ collection, offset: offset || 0 });
+    cmd = mg.mongoUriQueryCollectionCommand({ dbName: target.dbName, collection, offset: offset || 0 });
+    env = { MONGOURI: target.uri };
   } else {
     const sudo = await resolveDockerSudo(ch, server);
     cmd = mg.mongoQueryCollectionCommand({ ..._mongoVpsOpts(target, sudo), collection, offset: offset || 0 });
   }
-  const { stdout, stderr, exitCode } = await runCommand(ch, cmd);
+  const { stdout, stderr, exitCode } = await runCommand(ch, cmd, env);
   if (exitCode !== 0) {
     const msg = (stderr || stdout || 'mongosh exited ' + exitCode).trim();
     throw Object.assign(new Error(msg), { code: 'MONGO_ERROR' });

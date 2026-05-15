@@ -35,6 +35,14 @@ for (const k of required) {
 const root = path.join(__dirname, '..');
 const releaseDir = path.join(root, 'release');
 
+// Remove stale files from prior builds so we never upload wrong-version artifacts.
+if (fs.existsSync(releaseDir)) {
+  for (const entry of fs.readdirSync(releaseDir)) {
+    const full = path.join(releaseDir, entry);
+    if (fs.statSync(full).isFile()) fs.rmSync(full);
+  }
+}
+
 const argv = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const targetsArg = argv.flatMap((t) => (t === 'all' ? ['linux', 'win', 'mac'] : [t]));
 // Default: build for the host OS only. Cross-building Windows/Mac from Linux

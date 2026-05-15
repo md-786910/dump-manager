@@ -21,6 +21,7 @@
     "build:win": "electron-builder -w",
     "build:mac": "electron-builder -m",
     "release": "node scripts/release.js",
+    "release:win": "node scripts/release.js win",
     "site": "npm --prefix website run dev",
     "site:build": "npm --prefix website run build",
     "site:preview": "npm --prefix website run preview"

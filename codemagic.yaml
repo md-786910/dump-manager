@@ -1,0 +1,80 @@
+# Codemagic CI — Tunnex release pipeline
+#
+# Replaces GitHub Actions. Three parallel workflows (Linux, Windows, macOS)
+# each build their own platform artifacts and upload to Cloudflare R2.
+#
+# One-time setup in Codemagic UI → App → Environment variables → Global:
+#   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET,
+#   CF_PAGES_DEPLOY_HOOK (optional — triggers /download page rebuild)
+#
+# Trigger: push any tag matching v* (e.g. npm version patch && git push --follow-tags)
+
+workflows:
+
+  release-linux:
+    name: Release · Linux
+    instance_type: linux_x2
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+    environment:
+      node: 22
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+      - name: Build & publish to R2
+        # Only the Linux job triggers the Cloudflare Pages site rebuild
+        # (one rebuild per release, not three).
+        script: RELEASE_TRIGGER_SITE_REBUILD=1 node scripts/release.js linux
+    artifacts:
+      - release/*.AppImage
+      - release/*.deb
+      - release/*.blockmap
+
+  release-windows:
+    name: Release · Windows
+    instance_type: windows_x2
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+    environment:
+      node: 22
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+      - name: Build & publish to R2
+        script: node scripts/release.js win
+    artifacts:
+      - release/*.exe
+      - release/*.blockmap
+
+  release-mac:
+    name: Release · macOS
+    instance_type: mac_mini_m2
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+    environment:
+      node: 22
+      xcode: latest
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+      - name: Build & publish to R2
+        # CSC_IDENTITY_AUTO_DISCOVERY=false skips code-signing on unsigned beta builds.
+        script: |
+          export CSC_IDENTITY_AUTO_DISCOVERY=false
+          node scripts/release.js mac
+    artifacts:
+      - release/*.dmg
+      - release/*.zip
+      - release/*.blockmap

@@ -1,7 +1,7 @@
 {
   "name": "tunnex",
   "productName": "Tunnex",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Secure desktop tool for backing up and restoring Postgres / Mongo databases on docker-compose VPS or external URIs",
   "main": "src/main/index.js",
   "private": true,

@@ -299,10 +299,10 @@ async function run(opts) {
       const finishedAt = new Date();
       const meta = {
         schemaVersion: 2,
-        engine: 'postgres',
-        format: 'pg_custom',
-        serverId: server.id,
-        serverName: server.name,
+        engine: target.engine || 'postgres',
+        format: target.engine === 'mongo' ? 'mongodump_archive' : 'pg_custom',
+        serverId: server ? server.id : null,
+        serverName: server ? server.name : null,
         sourceProfileId: target.id, // legacy field name kept for sidecar compatibility
         sourceProfileName: target.name,
         envTag: target.envTag,

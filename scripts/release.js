@@ -61,8 +61,10 @@ console.log('Building for: ' + targets.join(', '));
 const build = spawnSync('npx', ['electron-builder', ...flags, '--publish', 'never'], {
   cwd: root,
   stdio: 'inherit',
+  shell: true,
   env: process.env,
 });
+if (build.error) { console.error('electron-builder spawn failed:', build.error.message); process.exit(1); }
 if (build.status !== 0) process.exit(build.status);
 
 // Upload installers, blockmaps, and the update manifests. Filename patterns

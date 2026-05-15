@@ -127,6 +127,7 @@ const cacheControl = (name) => name.endsWith('.yml')
       Bucket: process.env.R2_BUCKET,
       Key,
       Body,
+      ContentLength: size,
       ContentType: contentType(f),
       CacheControl: cacheControl(f),
     }));

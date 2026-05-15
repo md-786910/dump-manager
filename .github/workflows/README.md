@@ -71,6 +71,15 @@ If cost becomes a concern, you can:
 **"Missing R2_ACCESS_KEY_ID env var (CI: set as a repo secret)."**
 A secret isn't set on the repo. Check Settings → Secrets and variables → Actions.
 
+**"Credential sigv4 header should have at least 5 slash-separated parts, not 1"**
+One of the R2 GitHub secrets is not the S3-compatible value expected by the AWS SDK.
+Check these first:
+
+- `R2_ACCESS_KEY_ID`: the 32-character Access Key ID from R2 → Manage R2 API Tokens.
+- `R2_SECRET_ACCESS_KEY`: the 64-character Secret Access Key shown with that R2 token, not a Cloudflare API token.
+- `R2_ENDPOINT`: the S3 API endpoint, `https://<account-id>.r2.cloudflarestorage.com`, not the public `r2.dev` download URL.
+- `R2_BUCKET`: only the bucket name, for example `tunnex-releases`.
+
 **Mac job fails with `Code signing is required` / `signing identity not found`.**
 We pass `CSC_IDENTITY_AUTO_DISCOVERY=false` in the workflow to skip signing. If you see this anyway, electron-builder probably picked up a stray cert from the runner — open the failed job's logs and add the matching `CSC_*` skip variable. For unsigned beta this is harmless.
 

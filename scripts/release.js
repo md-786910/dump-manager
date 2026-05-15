@@ -35,6 +35,40 @@ for (const k of required) {
 const root = path.join(__dirname, '..');
 const releaseDir = path.join(root, 'release');
 
+const envValue = (key) => String(process.env[key] || '').trim();
+const r2 = {
+  accessKeyId: envValue('R2_ACCESS_KEY_ID'),
+  secretAccessKey: envValue('R2_SECRET_ACCESS_KEY'),
+  endpoint: envValue('R2_ENDPOINT').replace(/\/+$/, ''),
+  bucket: envValue('R2_BUCKET'),
+};
+
+const failConfig = (message) => {
+  console.error('Invalid R2 configuration: ' + message);
+  if (process.env.CI) {
+    console.error('Fix the repository secrets in GitHub Actions: R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET.');
+  } else {
+    console.error('Fix the R2_* values in .env.');
+  }
+  process.exit(1);
+};
+
+if (!/^https:\/\/[a-f0-9]{32}\.(?:(?:eu|fedramp)\.)?r2\.cloudflarestorage\.com$/i.test(r2.endpoint)) {
+  failConfig('R2_ENDPOINT must be the S3 API endpoint, e.g. https://<account-id>.r2.cloudflarestorage.com. Do not use the public r2.dev URL or a Cloudflare dashboard/API URL.');
+}
+
+if (!/^[a-f0-9]{32}$/i.test(r2.accessKeyId)) {
+  failConfig('R2_ACCESS_KEY_ID must be the 32-character R2 S3 Access Key ID from Cloudflare R2 > Manage R2 API Tokens.');
+}
+
+if (!/^[a-f0-9]{64}$/i.test(r2.secretAccessKey)) {
+  failConfig('R2_SECRET_ACCESS_KEY must be the 64-character R2 S3 Secret Access Key, not a Cloudflare API token.');
+}
+
+if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/i.test(r2.bucket)) {
+  failConfig('R2_BUCKET must be just the bucket name, without slashes or URLs.');
+}
+
 // Remove stale files from prior builds so we never upload wrong-version artifacts.
 if (fs.existsSync(releaseDir)) {
   for (const entry of fs.readdirSync(releaseDir)) {
@@ -84,7 +118,7 @@ const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 const s3 = new S3Client({
   region: 'auto',
-  endpoint: process.env.R2_ENDPOINT,
+  endpoint: r2.endpoint,
   // R2's TLS cert covers only one level of subdomain (*.r2.cloudflarestorage.com).
   // The SDK default (virtual-hosted-style) puts the bucket name as a further
   // subdomain and fails the TLS handshake — force path-style so the bucket
@@ -93,8 +127,8 @@ const s3 = new S3Client({
   requestChecksumCalculation: 'WHEN_REQUIRED',
   responseChecksumValidation: 'WHEN_REQUIRED',
   credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    accessKeyId: r2.accessKeyId,
+    secretAccessKey: r2.secretAccessKey,
   },
 });
 
@@ -144,7 +178,7 @@ const cacheControl = (name) => name.endsWith('.yml')
     const size = Body.length;
     process.stdout.write('  upload  ' + f + '  (' + (size / 1024 / 1024).toFixed(1) + ' MB) ...');
     await s3.send(new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET,
+      Bucket: r2.bucket,
       Key,
       Body,
       ContentLength: size,

@@ -2063,15 +2063,19 @@ function openRestoreModal(dumpPath) {
   $('restoreModalDumpInfo').textContent =
     fname + '\n' + formatTs(dump.createdAt) + ' · ' + formatBytes(dump.byteSize);
 
-  // Build target picker grouped by LOCAL / VPS
-  const pgTargets = state.targets.filter((t) => t.engine === 'postgres');
-  if (!pgTargets.length) { flashStatus('No Postgres targets to restore into.'); return; }
+  // Build target picker filtered to only targets matching the dump's engine
+  const dumpEngine = dump.engine || 'postgres';
+  const compatTargets = state.targets.filter((t) => (t.engine || 'postgres') === dumpEngine);
+  if (!compatTargets.length) {
+    flashStatus('No ' + (dumpEngine === 'mongo' ? 'MongoDB' : 'PostgreSQL') + ' targets to restore into.');
+    return;
+  }
 
-  const localTargets = pgTargets.filter((t) => {
+  const localTargets = compatTargets.filter((t) => {
     const s = state.servers.find((x) => x.id === t.serverId);
     return (s && s.kind === 'local') || t.kind === 'external-uri';
   });
-  const vpsTargets = pgTargets.filter((t) => {
+  const vpsTargets = compatTargets.filter((t) => {
     const s = state.servers.find((x) => x.id === t.serverId);
     return s && s.kind === 'ssh';
   });
@@ -2085,9 +2089,9 @@ function openRestoreModal(dumpPath) {
 
   // Pre-select: source dump's target, or current selected target
   const sourceId = dump.sourceProfileId;
-  const preferred = pgTargets.find((t) => t.id === sourceId) ||
-                    pgTargets.find((t) => t.id === state.selectedTargetId) ||
-                    pgTargets[0];
+  const preferred = compatTargets.find((t) => t.id === sourceId) ||
+                    compatTargets.find((t) => t.id === state.selectedTargetId) ||
+                    compatTargets[0];
   $('restoreTargetPicker').value = preferred.id;
 
   // Load the DB list for the pre-selected target; default to the dump's dbName
@@ -2108,6 +2112,12 @@ async function _loadRestoreDatabases(t, defaultDbName) {
     dbPicker.innerHTML = '<option value="' + escapeHtml(t.dbName) + '">' + escapeHtml(t.dbName) + ' (from URI)</option>';
     dbPicker.disabled = true;
     dbHint.textContent = 'Database is encoded in the URI and cannot be changed.';
+    return;
+  }
+  if (t.engine === 'mongo') {
+    dbPicker.innerHTML = '<option value="' + escapeHtml(t.dbName) + '">' + escapeHtml(t.dbName) + '</option>';
+    dbPicker.disabled = true;
+    dbHint.textContent = 'MongoDB restore targets the database defined in the target configuration.';
     return;
   }
   dbPicker.disabled = false;

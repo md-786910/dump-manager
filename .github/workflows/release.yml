@@ -21,15 +21,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            platform: linux
-            trigger_site: '1'   # only this job pokes the Cloudflare Pages hook
           - os: windows-latest
             platform: win
-            trigger_site: ''
           - os: macos-latest
             platform: mac
-            trigger_site: ''
 
     runs-on: ${{ matrix.os }}
 
@@ -63,7 +58,6 @@ jobs:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           CF_PAGES_DEPLOY_HOOK: ${{ secrets.CF_PAGES_DEPLOY_HOOK }}
-          RELEASE_TRIGGER_SITE_REBUILD: ${{ matrix.trigger_site }}
           # Skip electron-builder's built-in macOS code-signing attempts on
           # unsigned beta builds. Both env vars are recognised by builder.
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

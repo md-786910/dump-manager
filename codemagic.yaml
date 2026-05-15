@@ -1,17 +1,12 @@
-# Codemagic CI — Tunnex release pipeline
+# Codemagic CI — Tunnex Linux release
 #
-# AUTO-TRIGGER SETUP (one-time):
-#   Codemagic UI → App → Webhooks → copy the webhook URL
-#   GitHub repo  → Settings → Webhooks → Add webhook
-#     Payload URL : <paste Codemagic webhook URL>
-#     Content type: application/json
-#     Events      : "Pushes" (covers both branch pushes and tag pushes)
-#   Save — from that point every git push / tag push fires the right workflow.
+# Handles Linux builds on the free plan (500 min/month).
+# Windows and macOS are handled by GitHub Actions (free for public repos).
 #
-# HOW TRIGGERING WORKS:
-#   - Push to master          → no release build (no tag, patterns don't match)
-#   - npm version patch &&
-#     git push --follow-tags  → tag v* pushed → all 3 release workflows fire
+# AUTO-TRIGGER: GitHub repo → Settings → Webhooks → Add webhook
+#   Payload URL : <Codemagic app → Webhooks tab → copy URL>
+#   Content type: application/json
+#   Events      : "Just the push event"
 #
 # Secrets in Codemagic UI → App → Environment variables → group "new":
 #   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET,
@@ -21,7 +16,7 @@ workflows:
 
   release-linux:
     name: Release · Linux
-    instance_type: linux_x2
+    instance_type: linux
     triggering:
       events:
         - tag
@@ -37,61 +32,9 @@ workflows:
       - name: Install dependencies
         script: npm ci
       - name: Build & publish to R2
-        # Only the Linux job triggers the Cloudflare Pages site rebuild
-        # (one rebuild per release, not three).
+        # Linux is the only job that triggers the Cloudflare Pages site rebuild.
         script: RELEASE_TRIGGER_SITE_REBUILD=1 node scripts/release.js linux
     artifacts:
       - release/*.AppImage
       - release/*.deb
-      - release/*.blockmap
-
-  release-windows:
-    name: Release · Windows
-    instance_type: windows_x2
-    triggering:
-      events:
-        - tag
-      tag_patterns:
-        - pattern: 'v*'
-          include: true
-      cancel_previous_builds: false
-    environment:
-      node: 22
-      groups:
-        - new
-    scripts:
-      - name: Install dependencies
-        script: npm ci
-      - name: Build & publish to R2
-        script: node scripts/release.js win
-    artifacts:
-      - release/*.exe
-      - release/*.blockmap
-
-  release-mac:
-    name: Release · macOS
-    instance_type: mac_mini_m2
-    triggering:
-      events:
-        - tag
-      tag_patterns:
-        - pattern: 'v*'
-          include: true
-      cancel_previous_builds: false
-    environment:
-      node: 22
-      xcode: latest
-      groups:
-        - new
-    scripts:
-      - name: Install dependencies
-        script: npm ci
-      - name: Build & publish to R2
-        # CSC_IDENTITY_AUTO_DISCOVERY=false skips code-signing on unsigned beta builds.
-        script: |
-          export CSC_IDENTITY_AUTO_DISCOVERY=false
-          node scripts/release.js mac
-    artifacts:
-      - release/*.dmg
-      - release/*.zip
       - release/*.blockmap

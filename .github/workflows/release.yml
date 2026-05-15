@@ -5,8 +5,8 @@ name: Release
 #   - manual run from the Actions tab
 #
 # Each runner builds for its own OS, uploads its artifacts + manifest to R2,
-# and only the Linux job triggers a marketing-site rebuild (one site build per
-# release, not three).
+# then triggers a Cloudflare Pages site rebuild so the /download page always
+# reflects the latest R2 manifests. Linux is handled by Codemagic.
 on:
   push:
     tags: ['v*']
@@ -58,6 +58,7 @@ jobs:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           CF_PAGES_DEPLOY_HOOK: ${{ secrets.CF_PAGES_DEPLOY_HOOK }}
+          RELEASE_TRIGGER_SITE_REBUILD: '1'
           # Skip electron-builder's built-in macOS code-signing attempts on
           # unsigned beta builds. Both env vars are recognised by builder.
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

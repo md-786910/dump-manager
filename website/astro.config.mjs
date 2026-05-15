@@ -4,8 +4,8 @@ import tailwind from '@tailwindcss/vite';
 import cloudflare from "@astrojs/cloudflare";
 
 // Public URL of the marketing site. Override at build time via SITE env if you
-// need preview deploys with the right canonical URL (e.g. SITE=https://staging.tunnex.app).
-const site = process.env.SITE || 'https://tunnex.app';
+// need preview deploys with the right canonical URL (e.g. SITE=https://staging.tunnex.biz).
+const site = process.env.SITE || 'https://tunnex.biz';
 
 export default defineConfig({
   site,

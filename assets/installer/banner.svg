@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 493 58" width="493" height="58">
+  <defs>
+    <linearGradient id="banner-bg" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="60%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="icon-bg-b" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="db-b" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#cbd5e1"/>
+    </linearGradient>
+    <linearGradient id="arr-b" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="t-b" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="493" height="58" fill="url(#banner-bg)"/>
+  <line x1="0" y1="57" x2="493" y2="57" stroke="#1e3a5f" stroke-width="1"/>
+
+  <!-- Icon mark: 38×38 -->
+  <rect x="10" y="10" width="38" height="38" rx="7" fill="url(#icon-bg-b)"/>
+  <rect x="19" y="26" width="20" height="14" fill="url(#db-b)" opacity="0.92"/>
+  <ellipse cx="29" cy="26" rx="10" ry="3" fill="#ffffff"/>
+  <ellipse cx="29" cy="40" rx="10" ry="3" fill="url(#db-b)" opacity="0.85"/>
+  <line x1="19" y1="31" x2="39" y2="31" stroke="#0f172a" stroke-width="0.8" opacity="0.2"/>
+  <line x1="19" y1="36" x2="39" y2="36" stroke="#0f172a" stroke-width="0.8" opacity="0.2"/>
+  <rect x="27" y="15" width="4" height="9" rx="1.5" fill="url(#arr-b)"/>
+  <polygon points="29,11 34,16 24,16" fill="url(#arr-b)"/>
+
+  <!-- Wordmark -->
+  <text x="58" y="38"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="28" font-weight="700" letter-spacing="-0.5"
+    fill="url(#t-b)">T</text>
+  <text x="78" y="38"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="28" font-weight="700" letter-spacing="-0.5"
+    fill="#f1f5f9">unnex</text>
+
+  <!-- Tagline right-aligned -->
+  <text x="480" y="26" text-anchor="end"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="10" font-weight="500" fill="#94a3b8" letter-spacing="0.2">
+    Secure database backups, simplified.</text>
+  <text x="480" y="42" text-anchor="end"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="9.5" font-weight="400" fill="#475569" letter-spacing="0.5">
+    tunnex.biz</text>
+</svg>

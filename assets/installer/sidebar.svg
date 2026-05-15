@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 164 314" width="164" height="314">
+  <defs>
+    <linearGradient id="sidebar-bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="45%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="icon-bg-sb" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="db-sb" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#cbd5e1"/>
+    </linearGradient>
+    <linearGradient id="arr-sb" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="t-sb" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <radialGradient id="icon-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="164" height="314" fill="url(#sidebar-bg)"/>
+  <line x1="163" y1="0" x2="163" y2="314" stroke="#1e3a5f" stroke-width="1"/>
+  <rect x="0" y="0" width="164" height="3" fill="#0ea5e9" opacity="0.6"/>
+
+  <!-- Glow behind icon -->
+  <ellipse cx="82" cy="110" rx="60" ry="60" fill="url(#icon-glow)"/>
+
+  <!-- Icon mark: 80×80 -->
+  <rect x="42" y="70" width="80" height="80" rx="15" fill="url(#icon-bg-sb)"/>
+  <rect x="57" y="105" width="50" height="32" fill="url(#db-sb)" opacity="0.92"/>
+  <ellipse cx="82" cy="105" rx="25" ry="6.5" fill="#ffffff"/>
+  <ellipse cx="82" cy="137" rx="25" ry="6.5" fill="url(#db-sb)" opacity="0.85"/>
+  <line x1="57" y1="116" x2="107" y2="116" stroke="#0f172a" stroke-width="1.2" opacity="0.18"/>
+  <line x1="57" y1="127" x2="107" y2="127" stroke="#0f172a" stroke-width="1.2" opacity="0.18"/>
+  <rect x="78" y="80" width="8" height="21" rx="2.5" fill="url(#arr-sb)"/>
+  <polygon points="82,73 94,86 70,86" fill="url(#arr-sb)"/>
+
+  <!-- Wordmark -->
+  <text x="82" y="183" text-anchor="middle"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="32" font-weight="700" letter-spacing="-0.5" fill="#f1f5f9">
+    <tspan fill="url(#t-sb)">T</tspan><tspan>unnex</tspan>
+  </text>
+
+  <!-- Divider -->
+  <line x1="42" y1="197" x2="122" y2="197" stroke="#1e3a5f" stroke-width="1"/>
+
+  <!-- Tagline -->
+  <text x="82" y="216" text-anchor="middle"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="9.5" font-weight="400" fill="#94a3b8" letter-spacing="0.2">
+    Secure database backups,</text>
+  <text x="82" y="230" text-anchor="middle"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="9.5" font-weight="400" fill="#94a3b8" letter-spacing="0.2">
+    simplified.</text>
+
+  <!-- Domain -->
+  <text x="82" y="256" text-anchor="middle"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="9" font-weight="400" fill="#475569" letter-spacing="0.5">
+    tunnex.biz</text>
+
+  <!-- Version at bottom -->
+  <text x="82" y="296" text-anchor="middle"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="10" font-weight="500" fill="#475569" letter-spacing="1">
+    v0.1.8</text>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="311" width="164" height="3" fill="#0ea5e9" opacity="0.4"/>
+</svg>

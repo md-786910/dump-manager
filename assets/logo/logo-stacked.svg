@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" width="200" height="220">
+  <defs>
+    <linearGradient id="bg-s" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="db-s" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#cbd5e1"/>
+    </linearGradient>
+    <linearGradient id="arr-s" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="t-s" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon mark: 96×96 centered -->
+  <rect x="52" y="4" width="96" height="96" rx="18" fill="url(#bg-s)"/>
+  <rect x="72" y="46" width="56" height="38" fill="url(#db-s)" opacity="0.92"/>
+  <ellipse cx="100" cy="46" rx="28" ry="7" fill="#ffffff"/>
+  <ellipse cx="100" cy="84" rx="28" ry="7" fill="url(#db-s)" opacity="0.85"/>
+  <line x1="72" y1="59" x2="128" y2="59" stroke="#0f172a" stroke-width="1.5" opacity="0.18"/>
+  <line x1="72" y1="71" x2="128" y2="71" stroke="#0f172a" stroke-width="1.5" opacity="0.18"/>
+  <rect x="95" y="22" width="10" height="20" rx="3" fill="url(#arr-s)"/>
+  <polygon points="100,12 118,26 82,26" fill="url(#arr-s)"/>
+
+  <!-- "Tunnex" wordmark below icon -->
+  <text
+    x="23"
+    y="152"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="44"
+    font-weight="700"
+    letter-spacing="-1"
+    fill="url(#t-s)">T</text>
+  <text
+    x="53"
+    y="152"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="44"
+    font-weight="700"
+    letter-spacing="-1"
+    fill="#f1f5f9">unnex</text>
+
+  <!-- Tagline -->
+  <text
+    x="100"
+    y="178"
+    text-anchor="middle"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="11"
+    font-weight="400"
+    fill="#94a3b8"
+    letter-spacing="0.3">Secure database backups, simplified.</text>
+</svg>

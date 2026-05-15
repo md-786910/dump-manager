@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 298 64" width="298" height="64">
+  <defs>
+    <linearGradient id="t-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <text
+    x="0"
+    y="50"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="52"
+    font-weight="700"
+    letter-spacing="-1"
+    fill="url(#t-grad)">T</text>
+  <text
+    x="35"
+    y="50"
+    font-family="'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="52"
+    font-weight="700"
+    letter-spacing="-1"
+    fill="#f1f5f9">unnex</text>
+</svg>

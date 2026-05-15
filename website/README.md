@@ -40,8 +40,8 @@ uses pure CSS selectors to show the matching button. Zero JS framework.
    - **Build output directory:** `website/dist`
    - **Environment variables:** none required (R2 manifests are public).
 4. First deploy → site lives at `tunnex.pages.dev`.
-5. **Custom domain:** Pages → settings → custom domains → add `tunnex.app`
-   and `www.tunnex.app`. Cloudflare handles cert + DNS automatically.
+5. **Custom domain:** Pages → settings → custom domains → add `tunnex.biz`
+   and `www.tunnex.biz`. Cloudflare handles cert + DNS automatically.
 
 ## Auto-redeploy on app releases
 

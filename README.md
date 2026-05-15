@@ -562,7 +562,7 @@ Tunnex protects against:
 
 ### Reporting Security Issues
 
-For security vulnerabilities, please email security@tunnex.app (or contact maintainers privately). Do not file public issues for security bugs.
+For security vulnerabilities, please email security@tunnex.biz (or contact maintainers privately). Do not file public issues for security bugs.
 
 ---
 
@@ -575,9 +575,9 @@ Proprietary — All Rights Reserved.
 ## Support
 
 - **Documentation:** In-app help and tooltips
-- **Website:** https://tunnex.app
+- **Website:** https://tunnex.biz
 - **Issues:** GitHub Issues tracker
-- **Email:** support@tunnex.app (when available)
+- **Email:** support@tunnex.biz (when available)
 
 ---
 

@@ -43,6 +43,8 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: Tunnex
   uninstallDisplayName: Tunnex
+  installerSidebar: assets/installer/sidebar.png
+  installerHeader: assets/installer/banner.png
 
 linux:
   category: Development
@@ -51,7 +53,7 @@ linux:
       arch: [x64]
     - target: deb
       arch: [x64]
-  maintainer: Tunnex <noreply@example.com>
+  maintainer: Tunnex <hello@tunnex.biz>
   synopsis: Secure desktop tool for backing up and restoring Postgres / Mongo databases
 
 # electron-updater reads latest*.yml over plain HTTPS from this URL.

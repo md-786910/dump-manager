@@ -90,11 +90,6 @@ const s3 = new S3Client({
   // subdomain and fails the TLS handshake — force path-style so the bucket
   // travels in the URL path instead.
   forcePathStyle: true,
-  // @aws-sdk/client-s3 v3.729+ adds `x-amz-sdk-checksum-algorithm: CRC32` to
-  // PUTs by default. R2 doesn't recognise it, the signature it recomputes
-  // doesn't match the SDK's, and uploads fail with the misleading message
-  // "Credential sigv4 header should have at least 5 slash-separated parts".
-  // Disable the new flexible-checksums middleware to restore plain SigV4.
   requestChecksumCalculation: 'WHEN_REQUIRED',
   responseChecksumValidation: 'WHEN_REQUIRED',
   credentials: {
@@ -102,6 +97,26 @@ const s3 = new S3Client({
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
   },
 });
+
+// R2 rejects any request that carries x-amz-sdk-checksum-algorithm or
+// x-amz-checksum-* / x-amz-trailer headers — it returns the misleading
+// "Credential sigv4 header should have at least 5 slash-separated parts" error.
+// The requestChecksumCalculation config flag is not reliably honoured across
+// all SDK minor versions, so strip the headers explicitly after signing.
+s3.middlewareStack.add(
+  (next) => async (args) => {
+    const { headers } = args.request;
+    for (const key of Object.keys(headers)) {
+      if (
+        key === 'x-amz-sdk-checksum-algorithm' ||
+        key === 'x-amz-trailer' ||
+        key.startsWith('x-amz-checksum-')
+      ) delete headers[key];
+    }
+    return next(args);
+  },
+  { step: 'finalizeRequest', name: 'stripR2UnsupportedChecksumHeaders' }
+);
 
 const contentType = (name) => {
   if (name.endsWith('.yml')) return 'text/yaml';

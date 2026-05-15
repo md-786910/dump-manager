@@ -98,13 +98,12 @@ const s3 = new S3Client({
   },
 });
 
-// R2 rejects any request that carries x-amz-sdk-checksum-algorithm or
-// x-amz-checksum-* / x-amz-trailer headers — it returns the misleading
-// "Credential sigv4 header should have at least 5 slash-separated parts" error.
-// The requestChecksumCalculation config flag is not reliably honoured across
-// all SDK minor versions, so strip the headers explicitly after signing.
-// priority: 'low' places this middleware innermost (closest to the HTTP call),
-// ensuring it runs AFTER the signing middleware has added its trailer headers.
+// R2 does not support AWS's chunked/trailer signing mode. When the SDK receives
+// a ReadStream body it automatically sets x-amz-content-sha256 to a STREAMING-*
+// value and emits x-amz-trailer / x-amz-checksum-* headers that R2 rejects with
+// the misleading "Credential sigv4 header should have at least 5 slash-separated
+// parts" error. The real fix is to upload Buffers (below) so the SDK computes the
+// SHA256 upfront and signs normally. This middleware is kept as defense-in-depth.
 s3.middlewareStack.add(
   (next) => async (args) => {
     const { headers } = args.request;
@@ -139,8 +138,10 @@ const cacheControl = (name) => name.endsWith('.yml')
 (async () => {
   for (const f of uploadable) {
     const Key = 'releases/' + f;
-    const Body = fs.createReadStream(path.join(releaseDir, f));
-    const size = fs.statSync(path.join(releaseDir, f)).size;
+    // Buffer body (not ReadStream) — avoids the SDK's chunked/trailer signing
+    // mode that R2 rejects. Files top out at ~115 MB; CI runners have plenty of RAM.
+    const Body = fs.readFileSync(path.join(releaseDir, f));
+    const size = Body.length;
     process.stdout.write('  upload  ' + f + '  (' + (size / 1024 / 1024).toFixed(1) + ' MB) ...');
     await s3.send(new PutObjectCommand({
       Bucket: process.env.R2_BUCKET,

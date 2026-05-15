@@ -2108,16 +2108,10 @@ async function _loadRestoreDatabases(t, defaultDbName) {
   const dbPicker = $('restoreDbPicker');
   const dbHint = $('restoreDbHint');
 
-  if (t.kind === 'external-uri') {
+  if (t.kind === 'external-uri' && (t.engine || 'postgres') !== 'mongo') {
     dbPicker.innerHTML = '<option value="' + escapeHtml(t.dbName) + '">' + escapeHtml(t.dbName) + ' (from URI)</option>';
     dbPicker.disabled = true;
     dbHint.textContent = 'Database is encoded in the URI and cannot be changed.';
-    return;
-  }
-  if (t.engine === 'mongo') {
-    dbPicker.innerHTML = '<option value="' + escapeHtml(t.dbName) + '">' + escapeHtml(t.dbName) + '</option>';
-    dbPicker.disabled = true;
-    dbHint.textContent = 'MongoDB restore targets the database defined in the target configuration.';
     return;
   }
   dbPicker.disabled = false;

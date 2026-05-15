@@ -63,7 +63,36 @@ async function queryTable(ch, target, { schema, table, offset }, server) {
 }
 
 async function listDatabases(ch, target, server) {
-  if (target.kind === 'external-uri') throw Object.assign(new Error('DB list not available for URI targets'), { code: 'URI_TARGET' });
+  if (target.kind === 'external-uri' && target.engine !== 'mongo') {
+    throw Object.assign(new Error('DB list not available for URI targets'), { code: 'URI_TARGET' });
+  }
+
+  if (target.engine === 'mongo') {
+    let cmd, env;
+    if (target.kind === 'external-uri') {
+      cmd = mg.mongoUriListDbsCommand({});
+      env = { MONGOURI: target.uri };
+    } else if (target.kind === 'docker-compose-vps') {
+      const sudo = await resolveDockerSudo(ch, server);
+      cmd = mg.mongoListDbsCommand(_mongoVpsOpts(target, sudo));
+    } else {
+      const ins = target.installed || {};
+      const embedPassword = !!(server && server.kind === 'ssh');
+      cmd = mg.mongoInstalledListDbsCommand({
+        host: ins.host, port: ins.port,
+        mongoUser: ins.dbUser, mongoPassword: ins.dbPassword,
+        mongoAuthDb: ins.mongoAuthDb, embedPassword,
+      });
+      if (!embedPassword && ins.dbPassword) env = { MONGO_PWD: ins.dbPassword };
+    }
+    const { stdout, stderr, exitCode } = await runCommand(ch, cmd, env);
+    if (exitCode !== 0) {
+      const msg = (stderr || stdout || 'mongosh exited ' + exitCode).trim();
+      throw Object.assign(new Error(msg), { code: 'MONGO_ERROR' });
+    }
+    return mg.parseMongoDbs(stdout);
+  }
+
   const v = target.vps || {};
   const sudo = await resolveDockerSudo(ch, server);
   const cmd = pg.psqlListDbsCommand({

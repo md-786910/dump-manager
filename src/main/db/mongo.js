@@ -87,6 +87,23 @@ function mongoShellProbeCommand({ composeBin, sudo, projectName, composeProjectP
     + " sh -c 'mongosh --version > /dev/null 2>&1 && echo mongosh || echo mongo'";
 }
 
+function mongoUriListDbsCommand({ shell }) {
+  const sh = shell || 'mongosh';
+  const evalExpr = "JSON.stringify(db.adminCommand({listDatabases:1}).databases.map(function(d){return d.name}))";
+  return sh + ' "$MONGOURI" --quiet --eval ' + shQuote(evalExpr);
+}
+
+function mongoInstalledListDbsCommand({ host, port, mongoUser, mongoPassword, mongoAuthDb, embedPassword }) {
+  const h = '--host ' + shQuote(host || 'localhost');
+  const p = port ? ' --port ' + Number(port) : '';
+  const authArgs = mongoUser
+    ? ' --username ' + shQuote(mongoUser) + ' --password "$MONGO_PWD" --authenticationDatabase ' + shQuote(mongoAuthDb || 'admin')
+    : '';
+  const passPrefix = embedPassword && mongoPassword ? 'MONGO_PWD=' + shQuote(mongoPassword) + ' ' : '';
+  const evalExpr = "JSON.stringify(db.adminCommand({listDatabases:1}).databases.map(function(d){return d.name}))";
+  return passPrefix + 'mongosh ' + h + p + authArgs + ' --quiet --eval ' + shQuote(evalExpr);
+}
+
 function mongoListDbsCommand({ composeBin, sudo, projectName, composeProjectPath, service, mongoUser, mongoPassword, mongoAuthDb, shell }) {
   const cd = composeProjectPath ? 'cd ' + shQuote(composeProjectPath) + ' && ' : '';
   const pre = composePrefix({ composeBin, sudo, projectName });
@@ -172,6 +189,8 @@ function parseMongoDocuments(text) {
 }
 
 module.exports = {
+  mongoUriListDbsCommand,
+  mongoInstalledListDbsCommand,
   mongoInstalledDumpCommand,
   mongoInstalledRestoreCommand,
   mongoDumpCommand,

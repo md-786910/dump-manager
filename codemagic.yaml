@@ -1,13 +1,21 @@
 # Codemagic CI — Tunnex release pipeline
 #
-# Replaces GitHub Actions. Three parallel workflows (Linux, Windows, macOS)
-# each build their own platform artifacts and upload to Cloudflare R2.
+# AUTO-TRIGGER SETUP (one-time):
+#   Codemagic UI → App → Webhooks → copy the webhook URL
+#   GitHub repo  → Settings → Webhooks → Add webhook
+#     Payload URL : <paste Codemagic webhook URL>
+#     Content type: application/json
+#     Events      : "Pushes" (covers both branch pushes and tag pushes)
+#   Save — from that point every git push / tag push fires the right workflow.
 #
-# Secrets are stored in Codemagic UI → App → Environment variables → group "new":
+# HOW TRIGGERING WORKS:
+#   - Push to master          → no release build (no tag, patterns don't match)
+#   - npm version patch &&
+#     git push --follow-tags  → tag v* pushed → all 3 release workflows fire
+#
+# Secrets in Codemagic UI → App → Environment variables → group "new":
 #   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET,
 #   CF_PAGES_DEPLOY_HOOK (optional — triggers /download page rebuild)
-#
-# Trigger: push any tag matching v* (e.g. npm version patch && git push --follow-tags)
 
 workflows:
 
@@ -20,6 +28,7 @@ workflows:
       tag_patterns:
         - pattern: 'v*'
           include: true
+      cancel_previous_builds: false
     environment:
       node: 22
       groups:
@@ -45,6 +54,7 @@ workflows:
       tag_patterns:
         - pattern: 'v*'
           include: true
+      cancel_previous_builds: false
     environment:
       node: 22
       groups:
@@ -67,6 +77,7 @@ workflows:
       tag_patterns:
         - pattern: 'v*'
           include: true
+      cancel_previous_builds: false
     environment:
       node: 22
       xcode: latest

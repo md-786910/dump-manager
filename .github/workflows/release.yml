@@ -4,9 +4,9 @@ name: Release
 #   - a `v*` tag push (e.g. `git tag v0.1.1 && git push --tags`)
 #   - manual run from the Actions tab
 #
-# Each runner builds for its own OS, uploads its artifacts + manifest to R2,
-# then triggers a Cloudflare Pages site rebuild so the /download page always
-# reflects the latest R2 manifests. Linux is handled by Codemagic.
+# Each runner builds for its own OS and uploads its artifacts + manifest to R2.
+# macOS is handled by Codemagic (Apple silicon runners unavailable on GHA free tier).
+# Linux is the only job that triggers the Cloudflare Pages site rebuild.
 on:
   push:
     tags: ['v*']
@@ -23,8 +23,9 @@ jobs:
         include:
           - os: windows-latest
             platform: win
-          - os: macos-latest
-            platform: mac
+          - os: ubuntu-latest
+            platform: linux
+            trigger_site: '1'
 
     runs-on: ${{ matrix.os }}
 
@@ -41,8 +42,6 @@ jobs:
       - name: Install
         run: npm ci
 
-      # electron-builder needs the version to come from package.json; the tag
-      # is informational. Surface it in logs.
       - name: Show version
         shell: bash
         run: |
@@ -58,10 +57,7 @@ jobs:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           CF_PAGES_DEPLOY_HOOK: ${{ secrets.CF_PAGES_DEPLOY_HOOK }}
-          RELEASE_TRIGGER_SITE_REBUILD: '1'
-          # Skip electron-builder's built-in macOS code-signing attempts on
-          # unsigned beta builds. Both env vars are recognised by builder.
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          RELEASE_TRIGGER_SITE_REBUILD: ${{ matrix.trigger_site }}
         run: node scripts/release.js ${{ matrix.platform }}
 
       # On failure leave the artifacts as a workflow artifact so we can debug

@@ -1,7 +1,7 @@
-# Codemagic CI — Tunnex Linux release
+# Codemagic CI — Tunnex macOS release
 #
-# Handles Linux builds on the free plan (500 min/month).
-# Windows and macOS are handled by GitHub Actions (free for public repos).
+# Handles macOS builds on Apple silicon (mac_mini_m2).
+# Windows and Linux are handled by GitHub Actions.
 #
 # AUTO-TRIGGER: GitHub repo → Settings → Webhooks → Add webhook
 #   Payload URL : <Codemagic app → Webhooks tab → copy URL>
@@ -14,9 +14,9 @@
 
 workflows:
 
-  release-linux:
-    name: Release · Linux
-    instance_type: linux
+  release-mac:
+    name: Release · macOS
+    instance_type: mac_mini_m2
     triggering:
       events:
         - tag
@@ -28,13 +28,16 @@ workflows:
       node: 22
       groups:
         - new
+      vars:
+        # Skip macOS code-signing on unsigned builds.
+        CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     scripts:
       - name: Install dependencies
         script: npm ci
       - name: Build & publish to R2
-        # Linux is the only job that triggers the Cloudflare Pages site rebuild.
-        script: RELEASE_TRIGGER_SITE_REBUILD=1 node scripts/release.js linux
+        script: node scripts/release.js mac
     artifacts:
-      - release/*.AppImage
-      - release/*.deb
+      - release/*.dmg
+      - release/*.zip
       - release/*.blockmap
+      - release/latest-mac.yml

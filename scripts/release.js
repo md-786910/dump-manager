@@ -103,6 +103,8 @@ const s3 = new S3Client({
 // "Credential sigv4 header should have at least 5 slash-separated parts" error.
 // The requestChecksumCalculation config flag is not reliably honoured across
 // all SDK minor versions, so strip the headers explicitly after signing.
+// priority: 'low' places this middleware innermost (closest to the HTTP call),
+// ensuring it runs AFTER the signing middleware has added its trailer headers.
 s3.middlewareStack.add(
   (next) => async (args) => {
     const { headers } = args.request;
@@ -115,7 +117,7 @@ s3.middlewareStack.add(
     }
     return next(args);
   },
-  { step: 'finalizeRequest', name: 'stripR2UnsupportedChecksumHeaders' }
+  { step: 'finalizeRequest', priority: 'low', name: 'stripR2UnsupportedChecksumHeaders' }
 );
 
 const contentType = (name) => {

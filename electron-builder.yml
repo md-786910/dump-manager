@@ -56,6 +56,9 @@ linux:
   maintainer: Tunnex <hello@tunnex.biz>
   synopsis: Secure desktop tool for backing up and restoring Postgres / Mongo databases
 
+deb:
+  afterInstall: scripts/deb-postinstall.sh
+
 # electron-updater reads latest*.yml over plain HTTPS from this URL.
 # Replace <your-r2-public-host> with the public hostname Cloudflare R2 issues
 # (e.g. pub-XXXXXXXXX.r2.dev) or your custom domain.

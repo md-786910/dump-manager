@@ -13,6 +13,8 @@ const isActive = (href: string) => pathname === href;
 <header class="sticky top-0 z-50 backdrop-blur bg-[var(--color-bg)]/80 border-b border-[var(--color-border)]">
   <div class="max-w-6xl mx-auto px-5 h-14 flex items-center gap-6">
     <a href="/" class="flex items-center"><Logo /></a>
+
+    <!-- Desktop nav -->
     <nav class="hidden sm:flex items-center gap-1 text-sm">
       {links.map((l) => (
         <a
@@ -27,14 +29,101 @@ const isActive = (href: string) => pathname === href;
         </a>
       ))}
     </nav>
-    <div class="ml-auto flex items-center gap-3">
+
+    <!-- Desktop right section -->
+    <div class="hidden sm:flex items-center gap-3 ml-auto">
       <VersionChip />
       <a
         href="/download"
-        class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)]/90 transition-colors"
+        class="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)]/90 transition-colors"
       >
         Download
       </a>
     </div>
+
+    <!-- Hamburger button (mobile only) -->
+    <button
+      id="nav-toggle"
+      aria-label="Toggle navigation"
+      aria-expanded="false"
+      aria-controls="mobile-menu"
+      class="sm:hidden ml-auto p-2 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-2)] transition-colors"
+    >
+      <!-- Hamburger icon -->
+      <svg id="icon-menu" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/>
+        <line x1="3" y1="10" x2="17" y2="10"/>
+        <line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+      <!-- Close icon -->
+      <svg id="icon-close" class="hidden" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
+        <line x1="4" y1="4" x2="16" y2="16"/>
+        <line x1="16" y1="4" x2="4" y2="16"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Mobile menu panel -->
+  <div
+    id="mobile-menu"
+    class="hidden sm:hidden border-t border-[var(--color-border)] bg-[var(--color-bg)] "
+  >
+    <nav class="max-w-6xl mx-auto px-5 py-3 flex flex-col gap-1">
+      {links.map((l) => (
+        <a
+          href={l.href}
+          class={`px-3 py-2.5 rounded-md text-sm transition-colors ${
+            isActive(l.href)
+              ? 'text-[var(--color-text)] bg-[var(--color-bg-2)]'
+              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-2)]'
+          }`}
+        >
+          {l.label}
+        </a>
+      ))}
+      <div class="pt-2 pb-1">
+        <a
+          href="/download"
+          class="flex items-center justify-center px-4 py-2.5 rounded-md text-sm font-medium bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)]/90 transition-colors"
+        >
+          Download Tunnex — free beta
+        </a>
+      </div>
+    </nav>
   </div>
 </header>
+
+<script>
+  const toggle   = document.getElementById('nav-toggle')!;
+  const menu     = document.getElementById('mobile-menu')!;
+  const iconMenu = document.getElementById('icon-menu')!;
+  const iconClose = document.getElementById('icon-close')!;
+
+  function openMenu() {
+    menu.classList.remove('hidden');
+    toggle.setAttribute('aria-expanded', 'true');
+    iconMenu.classList.add('hidden');
+    iconClose.classList.remove('hidden');
+  }
+
+  function closeMenu() {
+    menu.classList.add('hidden');
+    toggle.setAttribute('aria-expanded', 'false');
+    iconMenu.classList.remove('hidden');
+    iconClose.classList.add('hidden');
+  }
+
+  toggle.addEventListener('click', () => {
+    menu.classList.contains('hidden') ? openMenu() : closeMenu();
+  });
+
+  // Close when a link inside the menu is clicked
+  menu.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMenu));
+
+  // Close on outside click
+  document.addEventListener('click', (e) => {
+    if (!menu.contains(e.target as Node) && !toggle.contains(e.target as Node)) {
+      closeMenu();
+    }
+  });
+</script>

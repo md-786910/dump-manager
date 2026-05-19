@@ -717,6 +717,31 @@
       </div>
     </div>
 
+    <!-- Prod-restore confirmation modal -->
+    <div class="modal" id="prodConfirmModal" hidden>
+      <div class="modal__backdrop"></div>
+      <div class="modal__card modal__card--narrow" role="dialog" aria-modal="true" aria-labelledby="prodConfirmTitle">
+        <header class="modal__head">
+          <h3 class="modal__title" id="prodConfirmTitle">Confirm production restore</h3>
+        </header>
+        <form class="form" id="prodConfirmForm">
+          <section class="form__section">
+            <p class="modal__warning" id="prodConfirmSummary"></p>
+            <label class="form__field">
+              <span class="form__label">Type the target name to confirm</span>
+              <input class="input mono" type="text" name="confirm" id="prodConfirmInput" autocomplete="off" />
+              <span class="form__hint" id="prodConfirmHint">Must match exactly.</span>
+            </label>
+          </section>
+          <footer class="modal__foot">
+            <div class="modal__foot-spacer"></div>
+            <button type="button" class="btn btn--ghost" id="prodConfirmCancel">Cancel</button>
+            <button type="submit" class="btn btn--danger" id="prodConfirmOk" disabled>Restore to PROD</button>
+          </footer>
+        </form>
+      </div>
+    </div>
+
     <!-- Settings modal -->
     <div class="modal" id="settingsModal" hidden>
       <div class="modal__backdrop"></div>
@@ -764,6 +789,7 @@
           </section>
           <section class="form__section">
             <h4 class="form__legend">Restore into</h4>
+            <p class="modal__warning" id="restoreModalWarning" hidden></p>
             <div class="form__field">
               <label class="form__label">Target (server · service)</label>
               <select class="input" id="restoreTargetPicker">

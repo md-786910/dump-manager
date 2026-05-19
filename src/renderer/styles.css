@@ -787,6 +787,16 @@ body[data-dev-mock="1"]::after {
   color: var(--tag-prod-fg);
   font-size: var(--fs-meta);
 }
+.modal__warning {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  background: var(--tag-prod-bg);
+  color: var(--tag-prod-fg);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--r-sm, 4px);
+  font-size: var(--fs-meta);
+  line-height: 1.35;
+}
 
 /* Forms */
 .form {

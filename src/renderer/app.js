@@ -136,6 +136,16 @@ const state = {
     closePassModal(v);
   });
 
+  // Prod-restore confirmation
+  $('prodConfirmCancel').addEventListener('click', () => closeProdConfirmModal(false));
+  $('prodConfirmInput').addEventListener('input', (e) => {
+    $('prodConfirmOk').disabled = e.target.value.trim() !== prodConfirmExpected;
+  });
+  $('prodConfirmForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if ($('prodConfirmInput').value.trim() === prodConfirmExpected) closeProdConfirmModal(true);
+  });
+
   // Settings
   $('btnSettings').addEventListener('click', openSettingsModal);
   $('settingsModalClose').addEventListener('click', closeSettingsModal);
@@ -1311,6 +1321,31 @@ function closePassModal(val) {
   if (r) r(val);
 }
 
+let prodConfirmResolver = null;
+let prodConfirmExpected = '';
+function askProdConfirm(t, info) {
+  prodConfirmExpected = t.name;
+  const lines = [
+    'You are about to RESTORE into a PROD target.',
+    'Target: ' + t.name,
+    'Database: ' + info.dbName,
+  ];
+  if (t.engine === 'mongo') lines.push('Mongo restore will --drop existing collections first.');
+  if (info.cleanFirst) lines.push('"Clean first" is ON — pg_restore will --clean --if-exists (drop objects).');
+  $('prodConfirmSummary').textContent = lines.join('\n');
+  const input = $('prodConfirmInput');
+  input.value = '';
+  $('prodConfirmOk').disabled = true;
+  $('prodConfirmModal').hidden = false;
+  setTimeout(() => input.focus(), 0);
+  return new Promise((res) => { prodConfirmResolver = res; });
+}
+function closeProdConfirmModal(ok) {
+  $('prodConfirmModal').hidden = true;
+  const r = prodConfirmResolver; prodConfirmResolver = null;
+  if (r) r(ok);
+}
+
 // ---------- backup ----------
 
 const PHASE_LABELS = {
@@ -2100,7 +2135,23 @@ function openRestoreModal(dumpPath) {
 
   $('restoreCleanFirst').checked = false;
   $('restoreModalError').hidden = true;
+  _updateRestoreProdWarning(preferred);
   $('restoreModal').hidden = false;
+}
+
+function _updateRestoreProdWarning(t) {
+  const el = $('restoreModalWarning');
+  if (!el) return;
+  if (t && t.envTag === 'prod') {
+    const dropNote = t.engine === 'mongo'
+      ? ' Mongo restores always pass --drop, so existing collections will be dropped before re-inserting.'
+      : '';
+    el.textContent = '⚠ This target is tagged PROD. Restoring will write to a production database.' + dropNote;
+    el.hidden = false;
+  } else {
+    el.textContent = '';
+    el.hidden = true;
+  }
 }
 
 // Populate #restoreDbPicker for the given target, pre-selecting defaultDbName.
@@ -2148,6 +2199,7 @@ function onRestoreTargetChange() {
   const t = state.targets.find((x) => x.id === id);
   if (!t) return;
   _loadRestoreDatabases(t, '');
+  _updateRestoreProdWarning(t);
 }
 
 function onRestoreDbChange() {
@@ -2178,6 +2230,15 @@ async function onRestoreConfirm() {
 
   const dbNameOverride = $('restoreDbPicker').value || null;
   const cleanFirst = $('restoreCleanFirst').checked;
+
+  if (t.envTag === 'prod') {
+    const ok = await askProdConfirm(t, { dbName: dbNameOverride || t.dbName, cleanFirst });
+    if (!ok) {
+      flashStatus('Prod restore cancelled.');
+      return;
+    }
+  }
+
   closeRestoreModal();
 
   startOpPanel(t, server);

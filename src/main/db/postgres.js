@@ -198,7 +198,8 @@ function psqlListTablesCommand({ composeBin, sudo, projectName, composeProjectPa
 // LIMIT 51 so caller can detect hasMore = rows > 50.
 function psqlQueryTableCommand({ composeBin, sudo, projectName, composeProjectPath, service, pgUser, dbName, schema, table, offset }) {
   const cd = composeProjectPath ? 'cd ' + shQuote(composeProjectPath) + ' && ' : '';
-  const sql = 'SELECT * FROM ' + pgIdent(schema) + '.' + pgIdent(table) + ' LIMIT 51 OFFSET ' + (offset | 0);
+  const sql = 'SELECT * FROM ' + pgIdent(schema) + '.' + pgIdent(table)
+    + ' ORDER BY 1 LIMIT 51 OFFSET ' + (offset | 0);
   return cd + composePrefix({ composeBin, projectName, sudo })
     + ' exec -T ' + shQuote(service)
     + ' psql -U ' + shQuote(pgUser || 'postgres')
@@ -212,7 +213,8 @@ function psqlUriListTablesCommand() {
 }
 
 function psqlUriQueryTableCommand({ schema, table, offset }) {
-  const sql = 'SELECT * FROM ' + pgIdent(schema) + '.' + pgIdent(table) + ' LIMIT 51 OFFSET ' + (offset | 0);
+  const sql = 'SELECT * FROM ' + pgIdent(schema) + '.' + pgIdent(table)
+    + ' ORDER BY 1 LIMIT 51 OFFSET ' + (offset | 0);
   return 'psql --csv "$PGURI" -c ' + shQuote(sql);
 }
 
@@ -286,40 +288,77 @@ function parsePsqlTableList(text) {
 }
 
 // Parse psql --csv output. First line is header. Returns { columns, rows }.
-// Handles quoted fields and commas inside quoted values.
+// RFC 4180 state-machine — correctly handles quoted fields that contain
+// commas, double-quotes (escaped as ""), and embedded newlines.
 function parsePsqlCsv(text) {
-  const lines = text.split(/\r?\n/);
-  // Remove trailing blank lines
-  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
-  if (!lines.length) return { columns: [], rows: [] };
+  if (!text) return { columns: [], rows: [] };
 
-  const parseRow = (line) => {
-    const fields = [];
-    let i = 0;
-    while (i < line.length) {
-      if (line[i] === '"') {
-        // Quoted field
-        let val = '';
-        i++; // skip opening quote
-        while (i < line.length) {
-          if (line[i] === '"' && line[i + 1] === '"') { val += '"'; i += 2; }
-          else if (line[i] === '"') { i++; break; }
-          else { val += line[i++]; }
+  const records = [];
+  let fields = [];
+  let field = '';
+  let inQuote = false;
+  let i = 0;
+
+  while (i < text.length) {
+    const ch = text[i];
+
+    if (inQuote) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          // Escaped double-quote inside quoted field
+          field += '"';
+          i += 2;
+        } else {
+          // Closing quote
+          inQuote = false;
+          i++;
         }
-        fields.push(val);
-        if (line[i] === ',') i++;
       } else {
-        const end = line.indexOf(',', i);
-        if (end === -1) { fields.push(line.slice(i)); break; }
-        fields.push(line.slice(i, end));
-        i = end + 1;
+        field += ch;
+        i++;
+      }
+    } else {
+      if (ch === '"') {
+        inQuote = true;
+        i++;
+      } else if (ch === ',') {
+        fields.push(field);
+        field = '';
+        i++;
+      } else if (ch === '\r' && text[i + 1] === '\n') {
+        fields.push(field);
+        field = '';
+        records.push(fields);
+        fields = [];
+        i += 2;
+      } else if (ch === '\n') {
+        fields.push(field);
+        field = '';
+        records.push(fields);
+        fields = [];
+        i++;
+      } else {
+        field += ch;
+        i++;
       }
     }
-    return fields;
-  };
+  }
 
-  const columns = parseRow(lines[0]);
-  const rows = lines.slice(1).map(parseRow);
+  // Flush the last field/record if there was no trailing newline
+  if (field !== '' || fields.length > 0) {
+    fields.push(field);
+    records.push(fields);
+  }
+
+  // Drop trailing empty records (e.g. from a final \n)
+  while (records.length && records[records.length - 1].every((f) => f === '')) {
+    records.pop();
+  }
+
+  if (!records.length) return { columns: [], rows: [] };
+
+  const columns = records[0];
+  const rows = records.slice(1);
   return { columns, rows };
 }
 

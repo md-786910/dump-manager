@@ -144,7 +144,7 @@ function mongoQueryCollectionCommand({ composeBin, sudo, projectName, composePro
     : '';
   const n = (offset | 0);
   // EJSON.stringify handles ObjectId, Date, etc. gracefully.
-  const evalExpr = "JSON.stringify(db[" + shQuote(collection) + "].find().skip(" + n + ").limit(51).toArray())";
+  const evalExpr = "JSON.stringify(db[" + shQuote(collection) + "].find().sort({_id:1}).skip(" + n + ").limit(51).toArray())";
   return cd + pre + ' exec -T' + eFlag + ' ' + shQuote(service)
     + ' ' + sh + authArgs + ' --db ' + shQuote(dbName) + ' --quiet --eval ' + shQuote(evalExpr);
 }
@@ -158,7 +158,7 @@ function mongoUriListCollectionsCommand({ dbName, shell }) {
 function mongoUriQueryCollectionCommand({ dbName, collection, offset, shell }) {
   const sh = shell || 'mongosh';
   const n = (offset | 0);
-  const evalExpr = "JSON.stringify(db[" + shQuote(collection) + "].find().skip(" + n + ").limit(51).toArray())";
+  const evalExpr = "JSON.stringify(db[" + shQuote(collection) + "].find().sort({_id:1}).skip(" + n + ").limit(51).toArray())";
   return sh + ' "$MONGOURI" --db ' + shQuote(dbName) + ' --quiet --eval ' + shQuote(evalExpr);
 }
 

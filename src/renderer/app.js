@@ -158,6 +158,17 @@ const state = {
   $('restoreModalConfirm').addEventListener('click', onRestoreConfirm);
   $('restoreTargetPicker').addEventListener('change', onRestoreTargetChange);
   $('restoreDbPicker').addEventListener('change', onRestoreDbChange);
+  $('restoreConfirmInput').addEventListener('input', _onRestoreConfirmInput);
+  $('restoreConfirmCopy').addEventListener('click', () => {
+    const db = $('restoreDbPicker').value;
+    if (!db) return;
+    navigator.clipboard.writeText(db).then(() => {
+      const btn = $('restoreConfirmCopy');
+      btn.style.color = 'var(--success, #4caf82)';
+      btn.style.opacity = '1';
+      setTimeout(() => { btn.style.color = ''; btn.style.opacity = ''; }, 1200);
+    });
+  });
 
   // Dump list — delegated click handler.
   $('dumpList').addEventListener('click', onDumpListClick);
@@ -1175,9 +1186,13 @@ function renderViewDbTableList(tables) {
   }
   ul.innerHTML = tables.map((tbl) =>
     '<li data-schema="' + escapeHtml(tbl.schema) + '" data-table="' + escapeHtml(tbl.table) + '">' +
-      '<span class="viewdb__tbl-schema">' + escapeHtml(tbl.schema) + '.</span>' +
-      escapeHtml(tbl.table) +
-      '<span class="viewdb__tbl-rows">' + (tbl.approxRows >= 0 ? tbl.approxRows.toLocaleString() : '') + '</span>' +
+      '<span class="viewdb__tbl-info">' +
+        '<span class="viewdb__tbl-name">' + escapeHtml(tbl.table) + '</span>' +
+        '<span class="viewdb__tbl-schema">' + escapeHtml(tbl.schema) + '</span>' +
+      '</span>' +
+      (tbl.approxRows > 0
+        ? '<span class="viewdb__tbl-count" title="Approximate — run ANALYZE for exact count">~' + tbl.approxRows.toLocaleString() + '</span>'
+        : '') +
     '</li>'
   ).join('');
   ul.onclick = (e) => {
@@ -1430,7 +1445,7 @@ function priorDumpEstimate(targetId) {
   return matches.reduce((m, d) => Math.max(m, d.byteSize), 0);
 }
 
-function startOpPanel(target, server) {
+function startOpPanel(target, server, kind = 'backup') {
   // Tear down any previous op state.
   if (state.activeBackup && state.activeBackup.tickInterval) {
     clearInterval(state.activeBackup.tickInterval);
@@ -1443,6 +1458,7 @@ function startOpPanel(target, server) {
     bytes: 0,
     history: [],          // recent { t, b } samples for rate calc
     phase: 'connecting',
+    kind,
     estimate: priorDumpEstimate(target.id),
     tickInterval: setInterval(tickOpPanel, 500),
   };
@@ -1454,6 +1470,7 @@ function startOpPanel(target, server) {
   setBarIndeterminate(true);
   setBarClass(null);
   applyPhase('connecting');
+  _renderOpContext(target, server, kind);
   $('opBytes').textContent = '';
   $('opRate').textContent = '';
   $('opElapsed').textContent = '';
@@ -1461,6 +1478,29 @@ function startOpPanel(target, server) {
   $('opRateSep').hidden = true;
   $('opElapsedSep').hidden = true;
   $('opEtaSep').hidden = true;
+}
+
+function _renderOpContext(target, server, kind) {
+  const ctx = $('opContext');
+  if (!target) { ctx.hidden = true; return; }
+
+  const isVps = !!(server && server.kind === 'ssh');
+  const locTag = isVps ? 'vps' : 'local';
+  const envTag = target.envTag || 'dev';
+  const dbName = target.dbName || '';
+  const serverLabel = isVps
+    ? (server.user || '') + '@' + (server.host || '')
+    : server && server.wslDistro ? 'WSL: ' + server.wslDistro : 'Docker';
+
+  const locBadge = '<span class="tag tag--' + locTag + '">' + locTag.toUpperCase() + '</span>';
+  const envBadge = '<span class="tag tag--' + envTag + '">' + envTag + '</span>';
+  const arrow = kind === 'restore' ? '→' : '←';
+
+  ctx.innerHTML = locBadge + ' ' + envBadge
+    + ' <span class="op-panel__context-sep">' + arrow + '</span>'
+    + ' <span class="op-panel__context-db">' + escapeHtml(dbName) + '</span>'
+    + (isVps ? ' <span class="op-panel__context-sep">·</span> ' + escapeHtml(serverLabel) : '');
+  ctx.hidden = false;
 }
 
 function setBarIndeterminate(on) {
@@ -1475,8 +1515,19 @@ function setBarClass(kind) {
   el.classList.toggle('op-panel__bar-inner--error', kind === 'error');
 }
 
+const RESTORE_PHASE_OVERRIDES = {
+  opening:   'Starting restore…',
+  waiting:   'Waiting for restore data…',
+  streaming: 'Streaming restore…',
+  stalled:   'Stalled — no data from source',
+};
+
 function applyPhase(phase) {
-  $('opPhase').textContent = PHASE_LABELS[phase] || phase;
+  const kind = (state.activeBackup && state.activeBackup.kind) || 'backup';
+  const label = (kind === 'restore' && RESTORE_PHASE_OVERRIDES[phase])
+    || PHASE_LABELS[phase]
+    || phase;
+  $('opPhase').textContent = label;
 }
 
 function onBackupProgress(ev) {
@@ -1619,6 +1670,7 @@ function dismissOpPanel() {
   }
   state.activeBackup = null;
   $('opPanel').hidden = true;
+  $('opContext').hidden = true;
 }
 
 function onCancelBackup() {
@@ -2172,10 +2224,12 @@ function openRestoreModalForFile(filePath) {
   $('restoreCleanFirst').checked = false;
   $('restoreModalError').hidden = true;
   _updateRestoreProdWarning(preferred);
+  _updateRestoreConfirmField();
+  _updateRestoreDestCard();
   $('restoreModal').hidden = false;
 }
 
-function _serverLabel(server, target) {
+function _serverLabel(server, _target) {
   if (!server) return '(local URI)';
   if (server.kind === 'local') {
     return server.wslDistro ? 'local · WSL: ' + server.wslDistro : 'local (Docker)';
@@ -2240,7 +2294,37 @@ function openRestoreModal(dumpPath) {
   $('restoreCleanFirst').checked = false;
   $('restoreModalError').hidden = true;
   _updateRestoreProdWarning(preferred);
+  _updateRestoreConfirmField();
+  _updateRestoreDestCard();
   $('restoreModal').hidden = false;
+}
+
+function _updateRestoreDestCard() {
+  const targetId = $('restoreTargetPicker').value;
+  const t = state.targets.find((x) => x.id === targetId);
+  const db = $('restoreDbPicker').value || '—';
+  const card = $('restoreDestCard');
+  if (!t) {
+    $('restoreDestBadges').innerHTML = '';
+    $('restoreDestTarget').textContent = '—';
+    $('restoreDestDb').textContent = '—';
+    $('restoreModalTitleBadges').innerHTML = '';
+    card.className = 'restore-dest';
+    return;
+  }
+  const server = state.servers.find((s) => s.id === t.serverId) || null;
+  const isVps = !!(server && server.kind === 'ssh');
+  const locTag = isVps ? 'vps' : 'local';
+  const envTag = t.envTag || 'dev';
+  const locBadge = '<span class="tag tag--' + locTag + '">' + locTag.toUpperCase() + '</span>';
+  const envBadge = '<span class="tag tag--' + envTag + '">' + envTag + '</span>';
+  $('restoreDestBadges').innerHTML = locBadge + ' ' + envBadge;
+  $('restoreModalTitleBadges').innerHTML = locBadge + ' ' + envBadge;
+  $('restoreDestTarget').textContent = t.name + ' — ' + _serverLabel(server, t);
+  $('restoreDestDb').textContent = db;
+  card.className = 'restore-dest' + (isVps ? ' is-vps' : '') + (envTag === 'prod' ? ' is-prod' : '');
+  const diff = $('restoreDestDiff');
+  diff.classList.toggle('is-visible', !!(db && db !== '—' && t.dbName && db !== t.dbName));
 }
 
 function _updateRestoreProdWarning(t) {
@@ -2296,6 +2380,7 @@ async function _loadRestoreDatabases(t, defaultDbName) {
   dbHint.textContent = toSelect === t.dbName
     ? 'Restoring into the same database as the original target.'
     : 'Restoring into a different database than the original target.';
+  _updateRestoreDestCard();
 }
 
 function onRestoreTargetChange() {
@@ -2304,6 +2389,7 @@ function onRestoreTargetChange() {
   if (!t) return;
   _loadRestoreDatabases(t, '');
   _updateRestoreProdWarning(t);
+  _updateRestoreDestCard();
 }
 
 function onRestoreDbChange() {
@@ -2314,6 +2400,24 @@ function onRestoreDbChange() {
   $('restoreDbHint').textContent = selectedDb === t.dbName
     ? 'Restoring into the same database as the original target.'
     : 'Restoring into a different database than the original target.';
+  _updateRestoreConfirmField();
+  _updateRestoreDestCard();
+}
+
+function _updateRestoreConfirmField() {
+  const db = $('restoreDbPicker').value || '';
+  $('restoreConfirmDbName').textContent = db;
+  $('restoreConfirmInput').value = '';
+  $('restoreConfirmInput').classList.remove('is-match');
+  $('restoreModalConfirm').disabled = true;
+}
+
+function _onRestoreConfirmInput(e) {
+  const expected = $('restoreDbPicker').value || '';
+  const typed = e.target.value;
+  const match = typed === expected;
+  e.target.classList.toggle('is-match', match);
+  $('restoreModalConfirm').disabled = !match;
 }
 
 function closeRestoreModal() {
@@ -2321,6 +2425,9 @@ function closeRestoreModal() {
   pendingRestoreDumpPath = null;
   pendingRestoreFilePath = null;
   $('restoreDbPicker').disabled = false;
+  $('restoreConfirmInput').value = '';
+  $('restoreConfirmInput').classList.remove('is-match');
+  $('restoreModalConfirm').disabled = true;
 }
 
 async function onRestoreConfirm() {
@@ -2351,7 +2458,7 @@ async function onRestoreConfirm() {
     ? window.dbm.restore.startFromFile(sourcePath, { targetId: t.id, cleanFirst, passphrase, dbNameOverride })
     : window.dbm.restore.start(sourcePath, { targetId: t.id, cleanFirst, passphrase, dbNameOverride });
 
-  startOpPanel(t, server);
+  startOpPanel(t, server, 'restore');
   let res = await doRestore('');
   if (!res.ok && res.code === 'NEED_PASSPHRASE') {
     const entered = await askPassphrase((server && server.name) || t.name);
@@ -2359,7 +2466,7 @@ async function onRestoreConfirm() {
       finishOp(false, null, 'Cancelled by user', 'cancelled');
       return;
     }
-    startOpPanel(t, server);
+    startOpPanel(t, server, 'restore');
     res = await doRestore(entered);
     if (res.ok && server) state.connections[server.id] = true;
   } else if (res.ok && server) {

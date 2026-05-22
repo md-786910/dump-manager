@@ -99,6 +99,7 @@
                 </button>
               </span>
             </div>
+            <div class="op-panel__context" id="opContext" hidden></div>
             <div class="op-panel__bar">
               <div class="op-panel__bar-inner" id="opBar"></div>
             </div>
@@ -798,51 +799,61 @@
       <div class="modal__backdrop"></div>
       <div class="modal__card modal__card--narrow" role="dialog" aria-modal="true" aria-labelledby="restoreModalTitle">
         <header class="modal__head">
-          <h3 class="modal__title" id="restoreModalTitle">Restore dump</h3>
+          <h3 class="modal__title" id="restoreModalTitle">Restore dump <span id="restoreModalTitleBadges"></span></h3>
           <button class="iconbtn" id="restoreModalClose" aria-label="Close">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
           </button>
         </header>
         <div class="form">
-          <section class="form__section">
-            <h4 class="form__legend">Source dump</h4>
-            <p class="form__hint mono" id="restoreModalDumpInfo">…</p>
-            <p class="form__hint mono" id="restoreModalCustomFileInfo" hidden>…</p>
-          </section>
-          <div class="form__field" id="restoreEngineField" hidden>
-            <label class="form__label">File type</label>
-            <select class="input" id="restoreEngineSelect">
-              <option value="postgres">PostgreSQL (.pgdump / .dump / .sql)</option>
-              <option value="mongo">MongoDB (.archive)</option>
-            </select>
+          <div class="restore-src">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:.5"><path d="M4 1h6l4 4v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/><path d="M10 1v4h4"/></svg>
+            <span class="mono" id="restoreModalDumpInfo">…</span>
+            <span class="mono" id="restoreModalCustomFileInfo" hidden>…</span>
           </div>
-          <section class="form__section">
-            <h4 class="form__legend">Restore into</h4>
+          <div class="restore-body">
             <p class="modal__warning" id="restoreModalWarning" hidden></p>
-            <div class="form__field">
-              <label class="form__label">Target (server · service)</label>
-              <select class="input" id="restoreTargetPicker">
-                <!-- populated by JS with <optgroup label="LOCAL"> and <optgroup label="VPS"> -->
+            <div class="restore-dest" id="restoreDestCard">
+              <div class="restore-dest__badges" id="restoreDestBadges"></div>
+              <div class="restore-dest__info">
+                <span id="restoreDestTarget">—</span>
+                <span class="restore-dest__arrow">→</span>
+                <span class="restore-dest__dbname" id="restoreDestDb">—</span>
+              </div>
+              <span class="restore-dest__diff" id="restoreDestDiff">⚠ different DB</span>
+            </div>
+            <div class="form__field" id="restoreEngineField" hidden>
+              <label class="form__label">File type</label>
+              <select class="input" id="restoreEngineSelect">
+                <option value="postgres">PostgreSQL (.pgdump / .dump / .sql)</option>
+                <option value="mongo">MongoDB (.archive)</option>
               </select>
+            </div>
+            <div class="form__field">
+              <label class="form__label">Target</label>
+              <select class="input" id="restoreTargetPicker"></select>
             </div>
             <div class="form__field">
               <label class="form__label">Database</label>
               <select class="input" id="restoreDbPicker"></select>
               <span class="form__hint" id="restoreDbHint"></span>
             </div>
-          </section>
-          <label class="form__checkbox">
-            <input type="checkbox" id="restoreCleanFirst" />
-            <span>
-              <span class="form__checkbox-label">Clean target DB first (<span class="mono">--clean --if-exists</span>)</span>
-              <span class="form__hint">Drops existing objects before restoring. Required when the DB already has the schema.</span>
-            </span>
-          </label>
+            <label class="form__checkbox">
+              <input type="checkbox" id="restoreCleanFirst" />
+              <span>
+                <span class="form__checkbox-label">Clean target DB first (<span class="mono">--clean --if-exists</span>)</span>
+                <span class="form__hint">Drops existing objects before restoring. Required when the DB already has the schema.</span>
+              </span>
+            </label>
+            <div class="restore-confirm">
+              <p class="restore-confirm__hint">Type <strong id="restoreConfirmDbName"></strong><button type="button" class="restore-confirm-field__copy" id="restoreConfirmCopy" title="Copy" aria-label="Copy database name"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3a1.5 1.5 0 0 0-1.5-1.5H3A1.5 1.5 0 0 0 1.5 3v6.5A1.5 1.5 0 0 0 3 11h2"/></svg></button> to confirm</p>
+              <input class="input mono" type="text" id="restoreConfirmInput" autocomplete="off" spellcheck="false" placeholder="database name" />
+            </div>
+          </div>
           <footer class="modal__foot">
             <p class="modal__error" id="restoreModalError" hidden></p>
             <div class="modal__foot-spacer"></div>
             <button type="button" class="btn btn--ghost" id="restoreModalCancel">Cancel</button>
-            <button type="button" class="btn btn--danger" id="restoreModalConfirm">Restore</button>
+            <button type="button" class="btn btn--danger" id="restoreModalConfirm" disabled>Restore</button>
           </footer>
         </div>
       </div>

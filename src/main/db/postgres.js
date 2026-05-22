@@ -172,7 +172,7 @@ function uriPsqlRestoreCommand() {
 // Converts a pg_dump custom-format file (read from stdin) to plain SQL on
 // stdout. No live database required. Used for the "Download as .sql" feature.
 function pgRestoreToSqlCommand() {
-  return 'pg_restore --format=plain -f -';
+  return 'pg_restore -f -';
 }
 
 // --- View DB helpers ---

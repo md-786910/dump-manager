@@ -88,12 +88,11 @@ function register({ app, keychain }) {
     try {
       const key = keychain.ensure(app);
       if (asSql) {
-        // Decrypt the .pgdump.enc to a plaintext .pgdump stream, then pipe
-        // through `pg_restore --format=plain -f -` to convert to plain SQL.
-        // No live database required — pg_restore reads the custom format and
-        // writes SQL DDL/DML to stdout.
+        // Decrypt the .pgdump.enc stream and pipe through pg_restore to convert
+        // to plain SQL (DDL + COPY data blocks). pg_restore reads custom format
+        // from stdin, writes the full SQL script to stdout (-f -). No live DB needed.
         await new Promise((resolve, reject) => {
-          const child = spawn('pg_restore', ['--format=plain', '-f', '-'], {
+          const child = spawn('pg_restore', ['-f', '-'], {
             windowsHide: true,
             stdio: ['pipe', 'pipe', 'pipe'],
           });
@@ -106,6 +105,7 @@ function register({ app, keychain }) {
           const readStream = fs.createReadStream(src);
 
           child.stdout.pipe(writeStream);
+          child.stdin.on('error', () => {});
           readStream.pipe(decrypt).pipe(child.stdin);
 
           child.on('close', (code) => {

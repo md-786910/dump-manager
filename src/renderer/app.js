@@ -163,6 +163,13 @@ const state = {
   $('dumpList').addEventListener('click', onDumpListClick);
   $('restoreFromFileBtn').addEventListener('click', onRestoreFromFileClick);
 
+  // Download format modal
+  $('downloadFormatClose').addEventListener('click', () => closeDownloadFormatModal(null));
+  $('downloadFormatCancel').addEventListener('click', () => closeDownloadFormatModal(null));
+  $('downloadFormatPgdump').addEventListener('click', () => closeDownloadFormatModal('pgdump'));
+  $('downloadFormatSql').addEventListener('click', () => closeDownloadFormatModal('sql'));
+  $('downloadFormatModal').querySelector('.modal__backdrop').addEventListener('click', () => closeDownloadFormatModal(null));
+
   // Ensure the dump folder is picked before the first dumps:list.
   try {
     const { dumpsDir } = await window.dbm.settings.ensureDumpsDir();
@@ -2063,7 +2070,7 @@ async function onDeleteDump(dumpPath) {
 }
 
 async function onDownloadDump(dumpPath) {
-  const format = await window.dbm.dialog.pickDownloadFormat();
+  const format = await openDownloadFormatModal();
   if (!format) return;
   const res = await window.dbm.dumps.download(dumpPath, format);
   if (res.cancelled) return;
@@ -2072,6 +2079,26 @@ async function onDownloadDump(dumpPath) {
     return;
   }
   flashStatus('Saved to ' + res.outPath);
+}
+
+// ---------- download format modal ----------
+
+let _downloadFormatResolve = null;
+
+function openDownloadFormatModal() {
+  return new Promise((resolve) => {
+    _downloadFormatResolve = resolve;
+    $('downloadFormatModal').hidden = false;
+    $('downloadFormatPgdump').focus();
+  });
+}
+
+function closeDownloadFormatModal(format) {
+  $('downloadFormatModal').hidden = true;
+  if (_downloadFormatResolve) {
+    _downloadFormatResolve(format || null);
+    _downloadFormatResolve = null;
+  }
 }
 
 // ---------- restore modal ----------

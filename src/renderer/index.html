@@ -942,6 +942,64 @@
       </div>
     </div>
 
+    <!-- Download format picker modal -->
+    <div class="modal" id="downloadFormatModal" hidden>
+      <div class="modal__backdrop"></div>
+      <div class="modal__card download-format-card" role="dialog" aria-modal="true" aria-labelledby="downloadFormatTitle">
+        <header class="modal__head">
+          <h3 class="modal__title" id="downloadFormatTitle">Export dump</h3>
+          <button class="iconbtn" id="downloadFormatClose" aria-label="Close">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+          </button>
+        </header>
+        <div class="dfm-body">
+          <p class="dfm-desc">Decrypts the backup to your chosen format. The original encrypted file is not modified.</p>
+          <div class="dfm-cards">
+
+            <button class="dfm-option" id="downloadFormatPgdump" data-format="pgdump">
+              <span class="dfm-option__icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <ellipse cx="12" cy="5" rx="7" ry="2.5"/>
+                  <path d="M5 5v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V5"/>
+                  <path d="M5 11v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-6"/>
+                </svg>
+              </span>
+              <span class="dfm-option__name mono">.pgdump</span>
+              <span class="dfm-option__sub">pg_dump custom format</span>
+              <ul class="dfm-option__pros">
+                <li>Smaller file — compressed</li>
+                <li>Fastest restore via <span class="mono">pg_restore</span></li>
+                <li>Supports selective table restore</li>
+              </ul>
+              <span class="dfm-option__badge">Recommended</span>
+            </button>
+
+            <button class="dfm-option" id="downloadFormatSql" data-format="sql">
+              <span class="dfm-option__icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <path d="M14 2v6h6M8 13h8M8 17h5"/>
+                </svg>
+              </span>
+              <span class="dfm-option__name mono">.sql</span>
+              <span class="dfm-option__sub">Plain SQL script</span>
+              <ul class="dfm-option__pros">
+                <li>Open in any text editor</li>
+                <li>Restore with <span class="mono">psql</span></li>
+                <li>Human-readable DDL &amp; data</li>
+              </ul>
+              <span class="dfm-option__badge dfm-option__badge--neutral">Universal</span>
+            </button>
+
+          </div>
+        </div>
+        <footer class="modal__foot">
+          <div class="modal__foot-spacer"></div>
+          <button type="button" class="btn btn--ghost" id="downloadFormatCancel">Cancel</button>
+        </footer>
+      </div>
+    </div>
+
     <script src="dev-mock.js"></script>
     <script src="app.js"></script>
   </body>

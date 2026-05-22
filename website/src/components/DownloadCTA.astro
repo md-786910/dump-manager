@@ -101,14 +101,68 @@ const primaryByOs: Record<string, ReturnType<typeof pickFile>> = {
       v{release.version} · checksums on the <a href="/download" class="underline hover:text-[var(--color-text-muted)]">download page</a>
     </p>
   </details>
+
+  <!-- CLI install row — auto-shows the right command for the visitor's OS -->
+  <div class:list={['w-full', compact ? 'max-w-md' : 'max-w-lg']}>
+    <p class:list={['text-[var(--color-text-faint)] font-mono mb-1.5', compact ? 'text-[10px]' : 'text-xs']}>
+      Or install via terminal:
+    </p>
+
+    {(['mac', 'linux', 'windows'] as const).map((os) => {
+      const isWin = os === 'windows';
+      const cmdId = `hero-cmd-${os}`;
+      const cmd = isWin ? 'irm https://tunnex.biz/install.ps1 | iex' : 'curl -fsSL https://tunnex.biz/install.sh | bash';
+      return (
+        <div
+          data-os-cli={os}
+          class:list={[
+            'hidden items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-2)] font-mono',
+            compact ? 'px-3 py-2 text-[11px]' : 'px-3 py-2.5 text-xs',
+          ]}
+        >
+          <span class="text-[var(--color-accent)] select-none shrink-0">{isWin ? 'PS>' : '$'}</span>
+          <code class="flex-1 text-[var(--color-text)] min-w-0 truncate" id={cmdId}>{cmd}</code>
+          <button
+            onclick={`copyCliCmd('${cmdId}', this)`}
+            aria-label="Copy install command"
+            class="shrink-0 p-1 rounded text-[var(--color-text-faint)] hover:text-[var(--color-accent)] transition-colors"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="5" width="9" height="9" rx="1.5"/>
+              <path d="M11 5V3a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 2 3v6A1.5 1.5 0 0 0 3.5 10.5H5"/>
+            </svg>
+          </button>
+        </div>
+      );
+    })}
+  </div>
 </div>
 
-<!-- Switch on [data-os] to reveal the right button. Default to linux on the server. -->
+<script is:inline>
+  function copyCliCmd(id, btn) {
+    var text = document.getElementById(id)?.textContent?.trim();
+    if (!text || !navigator.clipboard) return;
+    navigator.clipboard.writeText(text).then(function () {
+      var orig = btn.innerHTML;
+      btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 9 6 13 14 4"/></svg>';
+      setTimeout(function () { btn.innerHTML = orig; }, 1800);
+    });
+  }
+</script>
+
+<!-- Switch on [data-os] to reveal the right button and CLI command. Default to linux on the server. -->
 <style is:global>
   :root:not([data-os]) [data-os-cta="linux"],
   [data-os="linux"]   [data-os-cta="linux"],
   [data-os="mac"]     [data-os-cta="mac"],
   [data-os="windows"] [data-os-cta="windows"] {
     display: inline-flex !important;
+  }
+
+  :root:not([data-os]) [data-os-cli="linux"],
+  [data-os="linux"]    [data-os-cli="linux"],
+  [data-os="mac"]      [data-os-cli="mac"],
+  [data-os="windows"]  [data-os-cli="windows"] {
+    display: flex !important;
   }
 </style>

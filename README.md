@@ -1,8 +1,28 @@
-# Tunnex - Secure Database Backup Manager
+# Tunnex — Secure Database Backup Manager
 
-A **secure, open-source desktop application** for backing up and restoring PostgreSQL and MongoDB databases on Docker-based VPS deployments or external databases with enterprise-grade security and comprehensive audit logging.
+[![Latest release](https://img.shields.io/github/v/release/md-786910/dump-manager?label=release)](https://github.com/md-786910/dump-manager/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Platforms](https://img.shields.io/badge/platform-windows%20%7C%20macOS%20%7C%20linux-lightgrey)](https://tunnex.biz)
+[![Downloads](https://img.shields.io/github/downloads/md-786910/dump-manager/total)](https://github.com/md-786910/dump-manager/releases)
 
-**Version:** 0.1.8 | **Platform:** Cross-platform (Windows, macOS, Linux)
+A **free, open-source desktop application** for backing up and restoring PostgreSQL and MongoDB databases on Docker-based VPS deployments or external databases. AES-256-GCM streaming encryption, OS-keychain key storage, full audit log.
+
+**Version:** 0.1.15 | **Platform:** Cross-platform (Windows, macOS, Linux) | **License:** MIT
+
+## Install
+
+```bash
+# macOS (Homebrew Cask — planned)
+brew install --cask tunnex
+
+# Windows (winget — planned)
+winget install Tunnex.Tunnex
+
+# Linux (AppImage)
+curl -L https://github.com/md-786910/dump-manager/releases/latest/download/tunnex.AppImage -o tunnex && chmod +x tunnex && ./tunnex
+```
+
+Or download the installer for your OS from [tunnex.biz](https://tunnex.biz) or the [Releases page](https://github.com/md-786910/dump-manager/releases).
 
 ---
 
@@ -568,7 +588,7 @@ For security vulnerabilities, please email security@tunnex.biz (or contact maint
 
 ## License
 
-Proprietary — All Rights Reserved.
+MIT — see [LICENSE](./LICENSE).
 
 ---
 

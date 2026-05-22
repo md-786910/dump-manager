@@ -7,6 +7,10 @@ name: Release
 # Each runner builds for its own OS and uploads its artifacts + manifest to R2.
 # macOS is handled by Codemagic (Apple silicon runners unavailable on GHA free tier).
 # Linux is the only job that triggers the Cloudflare Pages site rebuild.
+#
+# Windows signing: SignPath Foundation (free for open-source projects).
+# Apply at https://signpath.io/solutions/open-source-community
+# Once approved, add SIGNPATH_API_TOKEN and SIGNPATH_ORG_ID to GitHub secrets.
 on:
   push:
     tags: ['v*']
@@ -14,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write   # required by SignPath action for OIDC trust
 
 jobs:
   build:
@@ -59,6 +64,21 @@ jobs:
           CF_PAGES_DEPLOY_HOOK: ${{ secrets.CF_PAGES_DEPLOY_HOOK }}
           RELEASE_TRIGGER_SITE_REBUILD: ${{ matrix.trigger_site }}
         run: node scripts/release.js ${{ matrix.platform }}
+
+      # Sign the Windows installer via SignPath Foundation (free OSS tier).
+      # Skipped automatically when SIGNPATH_API_TOKEN is not set (e.g. forks).
+      # Setup: https://signpath.io/solutions/open-source-community
+      - name: Sign Windows installer (SignPath Foundation)
+        if: matrix.platform == 'win' && secrets.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORG_ID }}
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: windows-installer
+          github-artifact-name: tunnex-win-unsigned
+          wait-for-completion: true
+          output-artifact-name: tunnex-win-signed
 
       # On failure leave the artifacts as a workflow artifact so we can debug
       # without pushing partial uploads to R2.

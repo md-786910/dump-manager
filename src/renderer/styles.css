@@ -706,6 +706,50 @@ body[data-dev-mock="1"]::after {
 .dump-list__actions { display: flex; gap: 6px; justify-content: flex-end; }
 .dump-list__actions .btn { padding: 4px 10px; font-size: 0.85em; }
 
+/* Restore-from-file import strip */
+.restore-file-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+.restore-file-strip:hover {
+  background: var(--bg-elev-2);
+  border-color: var(--accent);
+}
+.restore-file-strip:hover .restore-file-strip__icon { color: var(--accent); }
+.restore-file-strip__icon {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  transition: color var(--t-fast);
+}
+.restore-file-strip__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.restore-file-strip__label {
+  font-size: var(--fs-body);
+  color: var(--text);
+  font-weight: 500;
+}
+.restore-file-strip__formats {
+  font-size: var(--fs-secondary);
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  letter-spacing: 0.2px;
+}
+
 /* Activity list */
 .activity-list {
   list-style: none;

@@ -10,6 +10,33 @@ function register() {
   // On non-Windows, returns []. Errors (no WSL installed, etc.) → empty list
   // + an error field so the renderer can show a hint.
   ipcMain.handle('wsl:listDistros', () => listWslDistros());
+  ipcMain.handle('dialog:pickDumpFile', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const res = await dialog.showOpenDialog(win, {
+      title: 'Choose backup file to restore',
+      buttonLabel: 'Select file',
+      filters: [
+        { name: 'Backup files', extensions: ['pgdump', 'dump', 'sql', 'archive'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+      properties: ['openFile', 'dontAddToRecent'],
+    });
+    return res.canceled || !res.filePaths.length ? null : res.filePaths[0];
+  });
+
+  ipcMain.handle('dialog:pickDownloadFormat', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const res = await dialog.showMessageBox(win, {
+      type: 'question',
+      message: 'Choose export format',
+      detail: 'Plain SQL can be opened in any text editor and restored with psql.\npg_dump custom format is smaller and restores faster with pg_restore.',
+      buttons: ['Save as .pgdump', 'Save as .sql', 'Cancel'],
+      defaultId: 0,
+      cancelId: 2,
+    });
+    return ['pgdump', 'sql', null][res.response];
+  });
+
   ipcMain.handle('dialog:pickKeyFile', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const sshDir = path.join(os.homedir(), '.ssh');

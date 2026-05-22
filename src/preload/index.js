@@ -8,6 +8,8 @@ const INVOKE_CHANNELS = new Set([
   'targets:list', 'targets:create', 'targets:createMany', 'targets:update', 'targets:delete',
   'targets:listByServer', 'targets:existingDbsForServer', 'targets:getUri',
   'dumps:list', 'dumps:delete', 'dumps:download',
+  'dialog:pickDumpFile', 'dialog:pickDownloadFormat',
+  'restore:startFromFile',
   'audit:tail',
   'hosts:list', 'hosts:revoke',
   'backup:start', 'backup:cancel', 'backup:queueDepth',
@@ -67,10 +69,11 @@ contextBridge.exposeInMainWorld('dbm', {
   dumps: {
     list: () => invoke('dumps:list'),
     remove: (dumpPath) => invoke('dumps:delete', dumpPath),
-    download: (dumpPath) => invoke('dumps:download', { dumpPath }),
+    download: (dumpPath, format) => invoke('dumps:download', { dumpPath, format: format || 'pgdump' }),
   },
   restore: {
     start: (dumpPath, opts) => invoke('restore:start', { dumpPath, ...(opts || {}) }),
+    startFromFile: (filePath, opts) => invoke('restore:startFromFile', { filePath, ...(opts || {}) }),
     cancel: (opId) => invoke('restore:cancel', opId),
   },
   settings: {
@@ -110,6 +113,8 @@ contextBridge.exposeInMainWorld('dbm', {
   dialog: {
     pickKeyFile: () => invoke('dialog:pickKeyFile'),
     confirm: (opts) => invoke('dialog:confirm', opts || {}),
+    pickDumpFile: () => invoke('dialog:pickDumpFile'),
+    pickDownloadFormat: () => invoke('dialog:pickDownloadFormat'),
   },
   wsl: {
     listDistros: () => invoke('wsl:listDistros'),

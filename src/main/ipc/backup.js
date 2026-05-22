@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 
 const backupVps = require('../ops/backupVps');
 const restoreVps = require('../ops/restoreVps');
+const restoreFile = require('../ops/restoreFile');
 const sshClient = require('../ssh/client');
 const dumps = require('../storage/dumps');
 const audit = require('../storage/audit');
@@ -337,6 +338,139 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
         });
         send('backup:progress', { opId, phase: 'error', error: err.message, code });
         logging.error('restore', 'Restore failed: ' + (target && target.name) + ' — ' + err.message, {
+          targetId: target && target.id, code, stack: err.stack,
+        });
+        return { opId, ok: false, error: err.message, code };
+      }
+    })();
+
+    inFlightByServer.set(queueKey, exec);
+    try {
+      return await exec;
+    } finally {
+      if (inFlightByServer.get(queueKey) === exec) inFlightByServer.delete(queueKey);
+      abortByOp.delete(opId);
+    }
+  });
+  // --- Restore from custom file ---
+  //
+  // Same as restore:start but accepts any plain local backup file (.sql,
+  // .pgdump, .dump, .archive) — skips decryption, routes command by format.
+  ipcMain.handle('restore:startFromFile', async (event, { filePath, targetId, cleanFirst, passphrase, dbNameOverride }) => {
+    const opId = 'op-' + crypto.randomUUID();
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const send = (channel, payload) => { try { win && win.webContents.send(channel, payload); } catch {} };
+    const startedAt = Date.now();
+
+    const ac = new AbortController();
+    abortByOp.set(opId, ac);
+    send('backup:progress', { opId, phase: 'opening', op: 'restore' });
+
+    const fileFormat = restoreFile.detectFileFormat(filePath);
+
+    let target, server;
+    try {
+      if (!targetId) throw new Error('targetId is required for restore from custom file');
+      target = targets._getDecrypted(targetId);
+      if (target.kind === 'docker-compose-vps') {
+        server = servers.get(target.serverId);
+      } else if (target.kind === 'external-uri') {
+        server = null;
+      } else if (target.kind === 'installed') {
+        server = target.serverId ? servers.get(target.serverId) : null;
+      } else {
+        throw new Error('unsupported target.kind: ' + target.kind);
+      }
+    } catch (err) {
+      abortByOp.delete(opId);
+      send('backup:progress', { opId, phase: 'error', error: err.message });
+      logging.error('restore', 'Cannot start restore-from-file: ' + err.message, { filePath, targetId });
+      return { opId, ok: false, error: err.message };
+    }
+
+    logging.info('restore', 'Starting restore-from-file into "' + target.name + '"', {
+      targetId: target.id, serverId: server ? server.id : null,
+      server: server ? server.name : '(local URI)',
+      dbName: target.dbName, filePath, fileFormat, cleanFirst: !!cleanFirst,
+    });
+
+    const queueKey = server ? server.id : 'uri:' + target.id;
+    const prev = inFlightByServer.get(queueKey);
+    if (prev) {
+      send('backup:progress', { opId, phase: 'queued' });
+      logging.info('restore', 'Queued behind another op on ' + (server ? server.name : target.name));
+      try { await prev; } catch { /* ignore */ }
+    }
+
+    const exec = (async () => {
+      try {
+        const privateKey = server && server.kind === 'ssh' ? sshClient.loadPrivateKey(server.privateKeyPath) : null;
+        const effectivePass = passphrase || (server ? passphraseCache.get(server.id) : '') || '';
+
+        send('backup:progress', { opId, phase: 'connecting' });
+
+        const meta = await restoreFile.run({
+          server, target,
+          uri: target.kind === 'external-uri' ? target.uri : undefined,
+          filePath, fileFormat, cleanFirst: !!cleanFirst, dbNameOverride: dbNameOverride || null,
+          privateKey,
+          passphrase: effectivePass || undefined,
+          knownHosts,
+          signal: ac.signal,
+          onUntrustedHost: async ({ host, port, fingerprint, keyType }) => {
+            const res = await dialog.showMessageBox(win, {
+              type: 'warning',
+              buttons: ['Trust and continue', 'Cancel'],
+              defaultId: 1, cancelId: 1,
+              title: 'Unknown SSH host',
+              message: 'Trust ' + host + ':' + port + '?',
+              detail: 'This host has not been seen before.\n\n' + keyType + ' fingerprint:\n' + fingerprint,
+              noLink: true,
+            });
+            return res.response === 0;
+          },
+          onProgress: (p) => {
+            if (p && p.phase === 'stderr') {
+              logging.debug('restore-file', p.line || '', { opId, targetId: target.id });
+              return;
+            }
+            if (p && p.phase === 'stalled') {
+              logging.warn('restore', 'No data accepted by restore tool in ' + Math.round(p.idleMs / 1000) + 's',
+                { opId, targetId: target.id });
+            }
+            send('backup:progress', { opId, ...p });
+          },
+        });
+
+        if (passphrase && server) passphraseCache.set(server.id, passphrase);
+
+        audit.append(app, {
+          op: 'restore-file',
+          serverId: server ? server.id : null, serverName: server ? server.name : null,
+          targetId: target.id, profileId: target.id, profileName: target.name,
+          envTag: target.envTag, dbName: target.dbName,
+          ok: true, durationMs: Date.now() - startedAt,
+          bytesIn: meta.bytesIn, filePath, fileFormat, cleanFirst: !!cleanFirst,
+        });
+        send('backup:progress', { opId, phase: 'done', meta });
+        logging.info('restore', 'Restore-from-file completed: ' + target.name + ' (' + meta.bytesIn + ' bytes)', {
+          targetId: target.id, durationMs: Date.now() - startedAt, fileFormat,
+        });
+        return { opId, ok: true, meta };
+      } catch (err) {
+        const needsPassphrase = err && err.level === 'client-authentication'
+          || /passphrase|encrypted|cannot parse privateKey/i.test(err && err.message || '');
+        const code = needsPassphrase ? 'NEED_PASSPHRASE' : (err.code || null);
+        audit.append(app, {
+          op: 'restore-file',
+          serverId: server && server.id, serverName: server && server.name,
+          targetId: target && target.id, profileId: target && target.id,
+          profileName: target && target.name, dbName: target && target.dbName,
+          ok: false, error: err.message, code,
+          durationMs: Date.now() - startedAt,
+        });
+        send('backup:progress', { opId, phase: 'error', error: err.message, code });
+        logging.error('restore', 'Restore-from-file failed: ' + (target && target.name) + ' — ' + err.message, {
           targetId: target && target.id, code, stack: err.stack,
         });
         return { opId, ok: false, error: err.message, code };

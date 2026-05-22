@@ -145,6 +145,36 @@ function installedRestoreCommand({ host, port, dbUser, dbName, dbNameOverride, c
   return passPrefix + 'pg_restore' + cleanFlag + ' -h ' + h + p + u + ' -d ' + shQuote(dbNameOverride || dbName);
 }
 
+// psql-based restore — used when the source file is plain SQL (.sql extension).
+// psql reads SQL from stdin; --clean / --if-exists is not accepted (the SQL
+// file already contains DROP statements when dumped with --clean).
+
+function vpsPsqlRestoreCommand(opts) {
+  const cd = opts.composeProjectPath ? 'cd ' + shQuote(opts.composeProjectPath) + ' && ' : '';
+  const pre = composePrefix(opts);
+  const userFlag = opts.pgUser ? ' -U ' + shQuote(opts.pgUser) : '';
+  return cd + pre + ' exec -T ' + shQuote(opts.service)
+    + ' psql' + userFlag + ' -d ' + shQuote(opts.dbName);
+}
+
+function installedPsqlRestoreCommand({ host, port, dbUser, dbName, dbNameOverride, embedPassword, dbPassword }) {
+  const h = shQuote(host || 'localhost');
+  const p = port ? ' -p ' + Number(port) : '';
+  const u = dbUser ? ' -U ' + shQuote(dbUser) : '';
+  const passPrefix = embedPassword && dbPassword ? 'PGPASSWORD=' + shQuote(dbPassword) + ' ' : '';
+  return passPrefix + 'psql -h ' + h + p + u + ' -d ' + shQuote(dbNameOverride || dbName);
+}
+
+function uriPsqlRestoreCommand() {
+  return 'psql "$PGURI"';
+}
+
+// Converts a pg_dump custom-format file (read from stdin) to plain SQL on
+// stdout. No live database required. Used for the "Download as .sql" feature.
+function pgRestoreToSqlCommand() {
+  return 'pg_restore --format=plain -f -';
+}
+
 // --- View DB helpers ---
 
 const LIST_TABLES_SQL =
@@ -300,6 +330,10 @@ module.exports = {
   pgIdent,
   installedDumpCommand,
   installedRestoreCommand,
+  vpsPsqlRestoreCommand,
+  installedPsqlRestoreCommand,
+  uriPsqlRestoreCommand,
+  pgRestoreToSqlCommand,
   composePrefix,
   vpsDumpCommand,
   vpsRestoreCommand,

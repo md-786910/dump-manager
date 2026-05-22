@@ -28,9 +28,6 @@ workflows:
       node: 22
       groups:
         - new
-      vars:
-        # Skip macOS code-signing on unsigned builds.
-        CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     scripts:
       - name: Install dependencies
         script: npm ci

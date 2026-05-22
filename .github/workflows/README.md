@@ -80,9 +80,6 @@ Check these first:
 - `R2_ENDPOINT`: the S3 API endpoint, `https://<account-id>.r2.cloudflarestorage.com`, not the public `r2.dev` download URL.
 - `R2_BUCKET`: only the bucket name, for example `tunnex-releases`.
 
-**Mac job fails with `Code signing is required` / `signing identity not found`.**
-We pass `CSC_IDENTITY_AUTO_DISCOVERY=false` in the workflow to skip signing. If you see this anyway, electron-builder probably picked up a stray cert from the runner — open the failed job's logs and add the matching `CSC_*` skip variable. For unsigned beta this is harmless.
-
 **The Linux job uploaded but the site didn't rebuild.**
 Check the `trigger site rebuild` line in the Linux job's logs. Common causes:
 1. `CF_PAGES_DEPLOY_HOOK` secret isn't set on the repo.

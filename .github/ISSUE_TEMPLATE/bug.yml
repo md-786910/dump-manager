@@ -1,0 +1,85 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly.
+title: "[Bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please give us enough detail to reproduce it.
+
+        **Do not include database passwords, SSH keys, or production hostnames in this report.**
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what did you see instead?
+      placeholder: |
+        Steps:
+        1. ...
+        2. ...
+        3. ...
+
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+  - type: input
+    id: tunnex-version
+    attributes:
+      label: Tunnex version
+      description: Find this in the app's About menu.
+      placeholder: "0.1.15"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Linux (Ubuntu/Debian)
+        - Linux (Fedora/RHEL)
+        - Linux (other)
+    validations:
+      required: true
+  - type: dropdown
+    id: db
+    attributes:
+      label: Database type involved
+      multiple: true
+      options:
+        - PostgreSQL
+        - MongoDB
+        - Not applicable
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection type
+      multiple: true
+      options:
+        - SSH to docker-compose VPS
+        - SSH to host with native DB
+        - Direct URI (no SSH)
+        - Local Docker
+        - Not applicable
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Open the app's audit log or DevTools console. Paste anything that looks relevant. **Redact credentials and hostnames.**
+      render: shell
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have searched existing issues and this is not a duplicate.
+          required: true
+        - label: I have redacted credentials, SSH keys, and production hostnames.
+          required: true

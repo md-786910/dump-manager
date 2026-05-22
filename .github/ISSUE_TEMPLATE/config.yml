@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: mailto:security@tunnex.biz
+    about: Report security issues privately by email. Do not file a public issue.
+  - name: Tunnex website
+    url: https://tunnex.biz
+    about: Download installers and read documentation.

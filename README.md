@@ -417,7 +417,7 @@ npm run dev
 # Run tests
 npm test
 
-# Package for current platform (without signing)
+# Package for current platform
 npm pack
 
 # Build for all platforms
@@ -481,7 +481,7 @@ Releases are built automatically via **Codemagic CI/CD** on every git tag:
 ```bash
 git tag v0.1.8
 git push origin v0.1.8
-# Codemagic triggers → builds Windows/macOS/Linux → signs → uploads to releases
+# Codemagic triggers → builds Windows/macOS/Linux → uploads to releases
 ```
 
 ### Manual Build Process
@@ -515,16 +515,7 @@ npm run build:win
 See [electron-builder.yml](./electron-builder.yml) for platform-specific settings:
 
 - App ID, file associations, installer options
-- Code signing certificates (macOS, Windows)
 - DEB/RPM metadata for Linux distributions
-
-### Code Signing & Notarization
-
-For production releases, the build process handles:
-
-- **Windows:** Authenticode signing (requires code-signing certificate)
-- **macOS:** Code signing + App Notarization (required for Gatekeeper)
-- **Linux:** Unsigned AppImage (user verification via SHA-512)
 
 ---
 

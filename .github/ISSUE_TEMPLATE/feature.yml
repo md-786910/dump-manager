@@ -1,0 +1,46 @@
+name: Feature request
+description: Suggest a new feature or improvement.
+title: "[Feature] "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest something. The clearer the problem you're hitting, the more likely we are to build the right thing.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the actual pain. Lead with the problem, not the proposed solution.
+      placeholder: |
+        Today I have to... and it's frustrating because...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would the ideal solution look like?
+      description: How would Tunnex behave if this were already built?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+      description: Workarounds you tried, other tools you looked at, why they didn't fit.
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Roughly how big is this?
+      options:
+        - Small (a config option, a UI tweak)
+        - Medium (a new view or a new operation)
+        - Large (new database type, new transport, new platform)
+        - Not sure
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have searched existing issues and this is not a duplicate.
+          required: true

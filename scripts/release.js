@@ -189,6 +189,21 @@ const cacheControl = (name) => name.endsWith('.yml')
   }
   console.log('Release uploaded. Installed clients will pick it up on their next update poll.');
 
+  // Print SHA256 checksums for macOS zip files so the Homebrew tap cask can be
+  // updated with the correct hashes after each release.
+  if (targets.includes('mac')) {
+    const crypto = require('node:crypto');
+    const macZips = uploadable.filter((f) => /mac.*\.zip$/i.test(f));
+    if (macZips.length) {
+      console.log('\nHomebrew tap SHA256 checksums (paste into homebrew-tap/Casks/tunnex.rb):');
+      for (const f of macZips) {
+        const hash = crypto.createHash('sha256').update(fs.readFileSync(path.join(releaseDir, f))).digest('hex');
+        const label = f.includes('arm64') ? 'arm64' : 'x64';
+        console.log('  ' + label + ': ' + hash);
+      }
+    }
+  }
+
   // Optional: poke the marketing site's Cloudflare Pages deploy hook so the
   // /download page rebuilds with the new version and SHA. Skipped silently if
   // the env var isn't set.

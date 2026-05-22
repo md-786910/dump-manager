@@ -8,6 +8,7 @@ directories:
   buildResources: build
 
 afterPack: scripts/after-pack.js
+afterSign: scripts/notarize.js
 
 files:
   - src/**/*
@@ -18,22 +19,44 @@ files:
   - "!scripts/release.js"
   - "!**/*.md"
 
-# Unsigned beta builds.
+# macOS: ad-hoc signed (codesign --sign -).
+# Removes the "damaged app" error on Apple Silicon; users can right-click → Open
+# or double-click "Open Tunnex (first time).command" inside the DMG.
+# To enable full notarization later, see scripts/notarize.js.
 mac:
   category: public.app-category.developer-tools
+  identity: null                   # null = ad-hoc signing
+  hardenedRuntime: false           # Hardened Runtime requires a paid Developer ID
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
   target:
     - target: dmg
       arch: [x64, arm64]
     - target: zip
       arch: [x64, arm64]
-  identity: null
-  gatekeeperAssess: false
 
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+    - x: 270
+      y: 380
+      type: file
+      path: scripts/open-tunnex.command
+      name: "Open Tunnex (first time).command"
+
+# Windows: electron-builder produces unsigned artifacts.
+# Signing is handled post-build by SignPath Foundation (free for OSS projects).
+# See .github/workflows/release.yml for the signing step.
 win:
   target:
     - target: nsis
       arch: [x64]
-  signAndEditExecutable: false
 
 nsis:
   oneClick: false

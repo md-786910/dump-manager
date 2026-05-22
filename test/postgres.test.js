@@ -152,3 +152,81 @@ test('parseListing parses pg_restore --list output', () => {
   assert.equal(items[0].name, 'users');
   assert.equal(items[1].kind, 'SEQUENCE');
 });
+
+// --- psql restore command builders (plain SQL restore) ---
+
+test('vpsPsqlRestoreCommand uses psql not pg_restore', () => {
+  const cmd = pg.vpsPsqlRestoreCommand({
+    service: 'db', dbName: 'appdb',
+  });
+  assert.match(cmd, /psql -d 'appdb'$/);
+  assert.doesNotMatch(cmd, /pg_restore/);
+});
+
+test('vpsPsqlRestoreCommand includes -U pgUser when supplied', () => {
+  const cmd = pg.vpsPsqlRestoreCommand({ service: 'db', dbName: 'appdb', pgUser: 'app_user' });
+  assert.match(cmd, / -U 'app_user' /);
+});
+
+test('vpsPsqlRestoreCommand includes cd and compose prefix when composeProjectPath given', () => {
+  const cmd = pg.vpsPsqlRestoreCommand({
+    composeProjectPath: '/srv/app', service: 'db', dbName: 'appdb',
+  });
+  assert.match(cmd, /^cd '\/srv\/app' && docker compose exec -T 'db' psql -d 'appdb'$/);
+});
+
+test('vpsPsqlRestoreCommand does not include --clean (ignored for plain SQL)', () => {
+  const cmd = pg.vpsPsqlRestoreCommand({ service: 'db', dbName: 'appdb', cleanFirst: true });
+  assert.doesNotMatch(cmd, /--clean/);
+  assert.doesNotMatch(cmd, /--if-exists/);
+});
+
+test('vpsPsqlRestoreCommand respects sudo flag', () => {
+  const cmd = pg.vpsPsqlRestoreCommand({ service: 'db', dbName: 'appdb', sudo: true });
+  assert.match(cmd, /^sudo docker compose exec/);
+});
+
+test('vpsPsqlRestoreCommand uses docker-compose bin when specified', () => {
+  const cmd = pg.vpsPsqlRestoreCommand({ service: 'db', dbName: 'appdb', composeBin: 'docker-compose' });
+  assert.match(cmd, /docker-compose exec/);
+  assert.doesNotMatch(cmd, /docker compose exec/);
+});
+
+test('installedPsqlRestoreCommand uses psql not pg_restore', () => {
+  const cmd = pg.installedPsqlRestoreCommand({
+    host: 'localhost', port: 5432, dbUser: 'admin', dbName: 'appdb',
+  });
+  assert.match(cmd, /^psql -h 'localhost' -p 5432 -U 'admin' -d 'appdb'$/);
+  assert.doesNotMatch(cmd, /pg_restore/);
+  assert.doesNotMatch(cmd, /--clean/);
+});
+
+test('installedPsqlRestoreCommand uses dbNameOverride when provided', () => {
+  const cmd = pg.installedPsqlRestoreCommand({
+    host: 'localhost', dbName: 'appdb', dbNameOverride: 'restored_db',
+  });
+  assert.match(cmd, /-d 'restored_db'$/);
+});
+
+test('installedPsqlRestoreCommand prefixes PGPASSWORD when embedPassword is true', () => {
+  const cmd = pg.installedPsqlRestoreCommand({
+    host: 'localhost', dbName: 'appdb', embedPassword: true, dbPassword: 's3cr3t',
+  });
+  assert.match(cmd, /^PGPASSWORD='s3cr3t' psql/);
+});
+
+test('installedPsqlRestoreCommand omits PGPASSWORD when embedPassword is false', () => {
+  const cmd = pg.installedPsqlRestoreCommand({
+    host: 'localhost', dbName: 'appdb', embedPassword: false, dbPassword: 's3cr3t',
+  });
+  assert.doesNotMatch(cmd, /PGPASSWORD/);
+  assert.match(cmd, /^psql/);
+});
+
+test('uriPsqlRestoreCommand uses $PGURI env var', () => {
+  assert.equal(pg.uriPsqlRestoreCommand(), 'psql "$PGURI"');
+});
+
+test('pgRestoreToSqlCommand produces plain format stdout output', () => {
+  assert.equal(pg.pgRestoreToSqlCommand(), 'pg_restore --format=plain -f -');
+});

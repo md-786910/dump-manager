@@ -161,6 +161,7 @@ const state = {
 
   // Dump list — delegated click handler.
   $('dumpList').addEventListener('click', onDumpListClick);
+  $('restoreFromFileBtn').addEventListener('click', onRestoreFromFileClick);
 
   // Ensure the dump folder is picked before the first dumps:list.
   try {
@@ -2062,18 +2063,90 @@ async function onDeleteDump(dumpPath) {
 }
 
 async function onDownloadDump(dumpPath) {
-  const res = await window.dbm.dumps.download(dumpPath);
+  const format = await window.dbm.dialog.pickDownloadFormat();
+  if (!format) return;
+  const res = await window.dbm.dumps.download(dumpPath, format);
   if (res.cancelled) return;
   if (!res.ok) {
     flashStatus('Download failed: ' + (res.error || 'unknown'));
     return;
   }
-  flashStatus('Saved decrypted dump to ' + res.outPath);
+  flashStatus('Saved to ' + res.outPath);
 }
 
 // ---------- restore modal ----------
 
 let pendingRestoreDumpPath = null;
+let pendingRestoreFilePath = null;
+
+async function onRestoreFromFileClick() {
+  const filePath = await window.dbm.dialog.pickDumpFile();
+  if (!filePath) return;
+  openRestoreModalForFile(filePath);
+}
+
+function _detectEngineFromExtension(filePath) {
+  const ext = (filePath || '').split('.').pop().toLowerCase();
+  return ext === 'archive' ? 'mongo' : 'postgres';
+}
+
+function openRestoreModalForFile(filePath) {
+  pendingRestoreDumpPath = null;
+  pendingRestoreFilePath = filePath;
+
+  const fname = filePath.split(/[\\/]/).pop();
+  $('restoreModalDumpInfo').hidden = true;
+  $('restoreModalCustomFileInfo').textContent = fname;
+  $('restoreModalCustomFileInfo').hidden = false;
+
+  const inferredEngine = _detectEngineFromExtension(filePath);
+  const ext = (filePath || '').split('.').pop().toLowerCase();
+  const isAmbiguous = ext !== 'archive' && ext !== 'sql' && ext !== 'pgdump' && ext !== 'dump';
+
+  if (ext === 'archive') {
+    $('restoreEngineField').hidden = false;
+    $('restoreEngineSelect').value = 'mongo';
+  } else if (isAmbiguous) {
+    $('restoreEngineField').hidden = false;
+    $('restoreEngineSelect').value = 'postgres';
+  } else {
+    $('restoreEngineField').hidden = true;
+    $('restoreEngineSelect').value = inferredEngine;
+  }
+
+  const engine = $('restoreEngineSelect').value;
+  const compatTargets = state.targets.filter((t) => (t.engine || 'postgres') === engine);
+  if (!compatTargets.length) {
+    flashStatus('No ' + (engine === 'mongo' ? 'MongoDB' : 'PostgreSQL') + ' targets to restore into.');
+    return;
+  }
+
+  const localTargets = compatTargets.filter((t) => {
+    const s = state.servers.find((x) => x.id === t.serverId);
+    return (s && s.kind === 'local') || t.kind === 'external-uri';
+  });
+  const vpsTargets = compatTargets.filter((t) => {
+    const s = state.servers.find((x) => x.id === t.serverId);
+    return s && s.kind === 'ssh';
+  });
+
+  const makeOption = (t) =>
+    '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(_targetOptionLabel(t)) + '</option>';
+  const parts = [];
+  if (localTargets.length) parts.push('<optgroup label="LOCAL">' + localTargets.map(makeOption).join('') + '</optgroup>');
+  if (vpsTargets.length) parts.push('<optgroup label="VPS">' + vpsTargets.map(makeOption).join('') + '</optgroup>');
+  $('restoreTargetPicker').innerHTML = parts.join('');
+
+  const preferred = compatTargets.find((t) => t.id === state.selectedTargetId) || compatTargets[0];
+  $('restoreTargetPicker').value = preferred.id;
+
+  _loadRestoreDatabases(preferred, '');
+
+  $('restoreCleanFirst').checked = false;
+  $('restoreModalError').hidden = true;
+  _updateRestoreProdWarning(preferred);
+  $('restoreModal').hidden = false;
+}
 
 function _serverLabel(server, target) {
   if (!server) return '(local URI)';
@@ -2090,6 +2163,7 @@ function _targetOptionLabel(t) {
 
 function openRestoreModal(dumpPath) {
   pendingRestoreDumpPath = dumpPath;
+  pendingRestoreFilePath = null;
   const dump = state.dumps.find((d) => d.path === dumpPath);
   if (!dump) { flashStatus('Cannot restore: dump not found'); return; }
 
@@ -2097,6 +2171,9 @@ function openRestoreModal(dumpPath) {
   const fname = dump.path.split(/[\\/]/).pop();
   $('restoreModalDumpInfo').textContent =
     fname + '\n' + formatTs(dump.createdAt) + ' · ' + formatBytes(dump.byteSize);
+  $('restoreModalDumpInfo').hidden = false;
+  $('restoreModalCustomFileInfo').hidden = true;
+  $('restoreEngineField').hidden = true;
 
   // Build target picker filtered to only targets matching the dump's engine
   const dumpEngine = dump.engine || 'postgres';
@@ -2215,12 +2292,14 @@ function onRestoreDbChange() {
 function closeRestoreModal() {
   $('restoreModal').hidden = true;
   pendingRestoreDumpPath = null;
+  pendingRestoreFilePath = null;
   $('restoreDbPicker').disabled = false;
 }
 
 async function onRestoreConfirm() {
-  const dumpPath = pendingRestoreDumpPath;
-  if (!dumpPath) return;
+  const isCustomFile = !!pendingRestoreFilePath;
+  const sourcePath = isCustomFile ? pendingRestoreFilePath : pendingRestoreDumpPath;
+  if (!sourcePath) return;
 
   const targetId = $('restoreTargetPicker').value;
   const t = state.targets.find((x) => x.id === targetId);
@@ -2241,8 +2320,12 @@ async function onRestoreConfirm() {
 
   closeRestoreModal();
 
+  const doRestore = (passphrase) => isCustomFile
+    ? window.dbm.restore.startFromFile(sourcePath, { targetId: t.id, cleanFirst, passphrase, dbNameOverride })
+    : window.dbm.restore.start(sourcePath, { targetId: t.id, cleanFirst, passphrase, dbNameOverride });
+
   startOpPanel(t, server);
-  let res = await window.dbm.restore.start(dumpPath, { targetId: t.id, cleanFirst, passphrase: '', dbNameOverride });
+  let res = await doRestore('');
   if (!res.ok && res.code === 'NEED_PASSPHRASE') {
     const entered = await askPassphrase((server && server.name) || t.name);
     if (entered === null) {
@@ -2250,7 +2333,7 @@ async function onRestoreConfirm() {
       return;
     }
     startOpPanel(t, server);
-    res = await window.dbm.restore.start(dumpPath, { targetId: t.id, cleanFirst, passphrase: entered, dbNameOverride });
+    res = await doRestore(entered);
     if (res.ok && server) state.connections[server.id] = true;
   } else if (res.ok && server) {
     state.connections[server.id] = true;

@@ -7,6 +7,7 @@ const { ipcMain, dialog, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
+const { spawn } = require('node:child_process');
 
 const dumps = require('../storage/dumps');
 const settings = require('../storage/settings');
@@ -56,7 +57,8 @@ function register({ app, keychain }) {
   });
 
   // Save a decrypted copy of the dump to a user-chosen path.
-  ipcMain.handle('dumps:download', async (event, { dumpPath }) => {
+  // format: 'pgdump' (default) → raw decrypted binary; 'sql' → plain SQL via pg_restore.
+  ipcMain.handle('dumps:download', async (event, { dumpPath, format }) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const root = path.resolve(dumps.dumpDir(app));
     const src = path.resolve(dumpPath || '');
@@ -64,38 +66,81 @@ function register({ app, keychain }) {
       return { ok: false, error: 'refusing to read path outside dump dir' };
     }
 
-    const base = path.basename(src).replace(/\.pgdump\.enc$/, '.pgdump');
+    const asSql = format === 'sql';
+    const base = path.basename(src).replace(/\.pgdump\.enc$/, asSql ? '.sql' : '.pgdump');
     const res = await dialog.showSaveDialog(win, {
       title: 'Save decrypted dump as',
       defaultPath: base,
-      filters: [
-        { name: 'pg_dump custom format', extensions: ['pgdump', 'dump'] },
-        { name: 'All files', extensions: ['*'] },
-      ],
+      filters: asSql
+        ? [
+            { name: 'Plain SQL', extensions: ['sql'] },
+            { name: 'pg_dump custom format', extensions: ['pgdump', 'dump'] },
+            { name: 'All files', extensions: ['*'] },
+          ]
+        : [
+            { name: 'pg_dump custom format', extensions: ['pgdump', 'dump'] },
+            { name: 'All files', extensions: ['*'] },
+          ],
     });
     if (res.canceled || !res.filePath) return { ok: false, cancelled: true };
 
     const startedAt = Date.now();
     try {
       const key = keychain.ensure(app);
-      await pipeline(
-        fs.createReadStream(src),
-        new DecryptStream(key),
-        fs.createWriteStream(res.filePath, { mode: 0o600 }),
-      );
+      if (asSql) {
+        // Decrypt the .pgdump.enc to a plaintext .pgdump stream, then pipe
+        // through `pg_restore --format=plain -f -` to convert to plain SQL.
+        // No live database required — pg_restore reads the custom format and
+        // writes SQL DDL/DML to stdout.
+        await new Promise((resolve, reject) => {
+          const child = spawn('pg_restore', ['--format=plain', '-f', '-'], {
+            windowsHide: true,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+          child.on('error', (err) => reject(new Error('pg_restore not found: ' + err.message)));
+          let stderrBuf = '';
+          child.stderr.on('data', (c) => { stderrBuf += c.toString(); });
+
+          const writeStream = fs.createWriteStream(res.filePath, { mode: 0o600 });
+          const decrypt = new DecryptStream(key);
+          const readStream = fs.createReadStream(src);
+
+          child.stdout.pipe(writeStream);
+          readStream.pipe(decrypt).pipe(child.stdin);
+
+          child.on('close', (code) => {
+            if (code !== 0) {
+              return reject(new Error('pg_restore exited with code ' + code +
+                (stderrBuf ? '\n' + stderrBuf.trim() : '')));
+            }
+            resolve();
+          });
+          writeStream.on('error', reject);
+          readStream.on('error', reject);
+          decrypt.on('error', reject);
+        });
+      } else {
+        await pipeline(
+          fs.createReadStream(src),
+          new DecryptStream(key),
+          fs.createWriteStream(res.filePath, { mode: 0o600 }),
+        );
+      }
       audit.append(app, {
         op: 'download-dump', dumpPath: src, outPath: res.filePath,
+        format: asSql ? 'sql' : 'pgdump',
         ok: true, durationMs: Date.now() - startedAt,
       });
-      logging.info('dumps', 'Decrypted dump saved', { src, outPath: res.filePath });
+      logging.info('dumps', 'Decrypted dump saved' + (asSql ? ' as SQL' : ''), { src, outPath: res.filePath });
       return { ok: true, outPath: res.filePath };
     } catch (err) {
       try { if (fs.existsSync(res.filePath)) fs.unlinkSync(res.filePath); } catch {}
       audit.append(app, {
         op: 'download-dump', dumpPath: src, ok: false,
+        format: asSql ? 'sql' : 'pgdump',
         error: err.message, durationMs: Date.now() - startedAt,
       });
-      logging.error('dumps', 'Decrypt failed: ' + err.message, { src });
+      logging.error('dumps', 'Download failed: ' + err.message, { src, format: asSql ? 'sql' : 'pgdump' });
       return { ok: false, error: err.message };
     }
   });

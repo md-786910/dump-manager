@@ -243,18 +243,23 @@ async function run(opts) {
 
     const WARN_MS = 30_000;
     const STUCK_MS = 5 * 60_000;
+    const CONNECT_MS = 90_000;   // grace period before first byte — covers remote DB connection time
     const POST_EOF_MS = 30 * 60_000;
-    let lastByteAt = Date.now();
+    const opStartedAt = Date.now();
+    let lastByteAt = null;       // null until first chunk arrives
     let stallWarned = false;
     stallTimer = setInterval(() => {
-      const idle = Date.now() - lastByteAt;
-      if (idle >= STUCK_MS) {
+      const now = Date.now();
+      const idle = lastByteAt === null ? (now - opStartedAt) : (now - lastByteAt);
+      const stuckThreshold = lastByteAt === null ? CONNECT_MS : STUCK_MS;
+      const warnThreshold  = lastByteAt === null ? Math.round(CONNECT_MS * 0.67) : WARN_MS;
+      if (idle >= stuckThreshold) {
         clearInterval(stallTimer); stallTimer = null;
         const tool = fileFormat === 'sql' ? 'psql' : fileFormat === 'archive' ? 'mongorestore' : 'pg_restore';
         onErr(new Error('No data accepted by ' + tool + ' for ' + Math.round(idle / 1000) + 's — declaring stuck. Check the Logs drawer for stderr.'));
         return;
       }
-      if (idle >= WARN_MS && !stallWarned) {
+      if (idle >= warnThreshold && !stallWarned) {
         stallWarned = true;
         emit('stalled', { idleMs: idle });
       }
@@ -285,7 +290,13 @@ async function run(opts) {
       try { stream.stdin.end(); } catch {}
       emit('finalizing');
       const waitedAt = Date.now();
+      let lastFinalizeEmit = 0;
       const wait = () => {
+        const now = Date.now();
+        if (!lastFinalizeEmit || now - lastFinalizeEmit >= 5_000) {
+          lastFinalizeEmit = now;
+          if (onProgress) try { onProgress({ phase: 'finalizing-tick', elapsedMs: now - waitedAt }); } catch {}
+        }
         if (streamDone) {
           if (stallTimer) { clearInterval(stallTimer); stallTimer = null; }
           if (exitCode !== 0) {

@@ -65,7 +65,8 @@ function uriDumpCommand(opts) {
 
 function uriRestoreCommand(opts) {
   const cleanFlag = opts.cleanFirst ? ' --clean --if-exists' : '';
-  return 'pg_restore' + cleanFlag + ' -d "$PGURI"';
+  const txnFlag = opts.cleanFirst ? '' : ' --single-transaction';
+  return 'pg_restore --no-owner --no-privileges' + cleanFlag + txnFlag + ' -d "$PGURI"';
 }
 
 function vpsRestoreCommand(opts) {
@@ -73,8 +74,9 @@ function vpsRestoreCommand(opts) {
   const pre = composePrefix(opts);
   const userFlag = opts.pgUser ? ' -U ' + shQuote(opts.pgUser) : '';
   const cleanFlag = opts.cleanFirst ? ' --clean --if-exists' : '';
+  const txnFlag = opts.cleanFirst ? '' : ' --single-transaction';
   return cd + pre + ' exec -T ' + shQuote(opts.service)
-    + ' pg_restore' + userFlag + cleanFlag + ' -d ' + shQuote(opts.dbName);
+    + ' pg_restore --no-owner --no-privileges' + userFlag + cleanFlag + txnFlag + ' -d ' + shQuote(opts.dbName);
 }
 
 // Pre-flight: is the DB container actually running?
@@ -141,8 +143,9 @@ function installedRestoreCommand({ host, port, dbUser, dbName, dbNameOverride, c
   const p = port ? ' -p ' + Number(port) : '';
   const u = dbUser ? ' -U ' + shQuote(dbUser) : '';
   const cleanFlag = cleanFirst ? ' --clean --if-exists' : '';
+  const txnFlag = cleanFirst ? '' : ' --single-transaction';
   const passPrefix = embedPassword && dbPassword ? 'PGPASSWORD=' + shQuote(dbPassword) + ' ' : '';
-  return passPrefix + 'pg_restore' + cleanFlag + ' -h ' + h + p + u + ' -d ' + shQuote(dbNameOverride || dbName);
+  return passPrefix + 'pg_restore --no-owner --no-privileges' + cleanFlag + txnFlag + ' -h ' + h + p + u + ' -d ' + shQuote(dbNameOverride || dbName);
 }
 
 // psql-based restore — used when the source file is plain SQL (.sql extension).
@@ -154,7 +157,7 @@ function vpsPsqlRestoreCommand(opts) {
   const pre = composePrefix(opts);
   const userFlag = opts.pgUser ? ' -U ' + shQuote(opts.pgUser) : '';
   return cd + pre + ' exec -T ' + shQuote(opts.service)
-    + ' psql' + userFlag + ' -d ' + shQuote(opts.dbName);
+    + ' psql' + userFlag + ' --single-transaction' + ' -d ' + shQuote(opts.dbName);
 }
 
 function installedPsqlRestoreCommand({ host, port, dbUser, dbName, dbNameOverride, embedPassword, dbPassword }) {
@@ -162,11 +165,11 @@ function installedPsqlRestoreCommand({ host, port, dbUser, dbName, dbNameOverrid
   const p = port ? ' -p ' + Number(port) : '';
   const u = dbUser ? ' -U ' + shQuote(dbUser) : '';
   const passPrefix = embedPassword && dbPassword ? 'PGPASSWORD=' + shQuote(dbPassword) + ' ' : '';
-  return passPrefix + 'psql -h ' + h + p + u + ' -d ' + shQuote(dbNameOverride || dbName);
+  return passPrefix + 'psql --single-transaction' + ' -h ' + h + p + u + ' -d ' + shQuote(dbNameOverride || dbName);
 }
 
 function uriPsqlRestoreCommand() {
-  return 'psql "$PGURI"';
+  return 'psql --single-transaction "$PGURI"';
 }
 
 // Converts a pg_dump custom-format file (read from stdin) to plain SQL on

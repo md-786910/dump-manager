@@ -268,7 +268,13 @@ async function run(opts) {
       emit('finalizing');
       // Wait for remote process to actually finish.
       const waitedAt = Date.now();
+      let lastFinalizeEmit = 0;
       const wait = () => {
+        const now = Date.now();
+        if (!lastFinalizeEmit || now - lastFinalizeEmit >= 5_000) {
+          lastFinalizeEmit = now;
+          if (onProgress) try { onProgress({ phase: 'finalizing-tick', elapsedMs: now - waitedAt }); } catch {}
+        }
         if (streamDone) {
           if (stallTimer) { clearInterval(stallTimer); stallTimer = null; }
           if (exitCode !== 0) {

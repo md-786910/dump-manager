@@ -1386,7 +1386,7 @@ const PHASE_LABELS = {
   waiting:               'Waiting for pg_dump to produce data…',
   streaming:             'Streaming dump…',
   stalled:               'Stalled — no data from pg_dump',
-  finalizing:            'Finalizing — pg_restore processing data…',
+  finalizing:            'Finalizing — rebuilding indexes & constraints…',
   done:                  'Completed',
   error:                 'Failed',
   cancelled:             'Cancelled',
@@ -1519,7 +1519,7 @@ const RESTORE_PHASE_OVERRIDES = {
   opening:   'Starting restore…',
   waiting:   'Waiting for restore data…',
   streaming: 'Streaming restore…',
-  stalled:   'Stalled — no data from source',
+  stalled:   'Waiting — pg_restore connecting to database…',
 };
 
 function applyPhase(phase) {
@@ -1537,6 +1537,9 @@ function onBackupProgress(ev) {
   if (!b.opId) b.opId = ev.opId;
   if (ev.opId !== b.opId) return;
   if (b.userCancelled) return;
+
+  // Heartbeat from finalizing phase — just a keepalive, no state change.
+  if (ev.phase === 'finalizing-tick') return;
 
   // Stall events change the label and bar style but don't end the operation.
   if (ev.phase === 'stalled') {
@@ -1556,6 +1559,7 @@ function onBackupProgress(ev) {
   if (ev.phase && ev.phase !== 'streaming') {
     b.phase = ev.phase;
     applyPhase(ev.phase);
+    if (ev.phase === 'finalizing' && !b.finalizedAt) b.finalizedAt = Date.now();
     if (ev.phase === 'done') return finishOp(true, ev.meta);
     if (ev.phase === 'error') {
       finishOp(false, null, ev.error);
@@ -1601,7 +1605,8 @@ function tickOpPanel() {
   }
 
   if (b.bytes > 0) {
-    $('opBytes').textContent = formatBytes(b.bytes) + (b.estimate ? ' / ~' + formatBytes(b.estimate) : '');
+    const estText = (b.estimate && b.estimate > b.bytes) ? ' / ~' + formatBytes(b.estimate) : '';
+    $('opBytes').textContent = formatBytes(b.bytes) + estText;
   } else {
     $('opBytes').textContent = '';
   }
@@ -1625,9 +1630,10 @@ function tickOpPanel() {
       }
     }
   } else {
-    // During finalizing pg_restore is processing — don't show "idle Xs" which looks like it's stuck.
+    // During finalizing pg_restore is rebuilding indexes — show elapsed time so it doesn't look stuck.
     if (b.phase === 'finalizing') {
-      $('opRate').textContent = 'pg_restore working…';
+      const finMs = b.finalizedAt ? Date.now() - b.finalizedAt : 0;
+      $('opRate').textContent = 'building indexes' + (finMs > 5000 ? ' · ' + formatDuration(finMs) : '') + '…';
       $('opRateSep').hidden = false;
     } else {
       $('opRate').textContent = b.lastByteAt ? 'idle ' + formatDuration(lastSampleAge) : '';

@@ -76,10 +76,11 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
       compressionLevel: cl == null ? '1 (default — fast)' : cl,
     });
 
-    // Per-server queueing — external-uri targets don't have a server, so they
-    // use a synthetic key based on the target so we don't try to dump the
-    // same DB twice concurrently.
-    const queueKey = server ? server.id : 'uri:' + target.id;
+    // Per-server queueing for SSH targets — avoids parallel SSH sessions to the
+    // same VPS (sshd throttling, docker-compose locking). For local/installed
+    // targets there is no SSH concern, so we key by target instead of server,
+    // allowing concurrent ops to different databases on the same host.
+    const queueKey = (server && server.kind === 'ssh') ? server.id : 'target:' + target.id;
     const prev = inFlightByServer.get(queueKey);
     if (prev) {
       send('backup:progress', { opId, phase: 'queued' });
@@ -259,7 +260,7 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
       dbName: target.dbName, dumpPath, cleanFirst: !!cleanFirst,
     });
 
-    const queueKey = server ? server.id : 'uri:' + target.id;
+    const queueKey = (server && server.kind === 'ssh') ? server.id : 'target:' + target.id;
     const prev = inFlightByServer.get(queueKey);
     if (prev) {
       send('backup:progress', { opId, phase: 'queued' });
@@ -394,7 +395,7 @@ function register({ app, servers, targets, knownHosts, keychain, passphraseCache
       dbName: target.dbName, filePath, fileFormat, cleanFirst: !!cleanFirst,
     });
 
-    const queueKey = server ? server.id : 'uri:' + target.id;
+    const queueKey = (server && server.kind === 'ssh') ? server.id : 'target:' + target.id;
     const prev = inFlightByServer.get(queueKey);
     if (prev) {
       send('backup:progress', { opId, phase: 'queued' });

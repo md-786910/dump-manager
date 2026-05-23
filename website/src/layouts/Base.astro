@@ -51,6 +51,15 @@ const canonical = new URL(Astro.url.pathname, Astro.site || 'https://tunnex.biz'
     <link rel="stylesheet" href="https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap" />
 
     <script is:inline set:html={detectScript}></script>
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HFYDWJ5ZEW" is:inline></script>
+    <script is:inline>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-HFYDWJ5ZEW');
+    </script>
   </head>
   <body class="min-h-screen flex flex-col">
     <Header />

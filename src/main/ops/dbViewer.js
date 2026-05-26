@@ -2,6 +2,7 @@
 
 const pg = require('../db/postgres');
 const mg = require('../db/mongo');
+const mgNative = require('../db/mongoNative');
 const runCommand = require('../exec/runCommand');
 const { resolveDockerSudo } = require('../exec/dockerSudo');
 
@@ -68,11 +69,12 @@ async function listDatabases(ch, target, server) {
   }
 
   if (target.engine === 'mongo') {
-    let cmd, env;
     if (target.kind === 'external-uri') {
-      cmd = mg.mongoUriListDbsCommand({});
-      env = { MONGOURI: target.uri };
-    } else if (target.kind === 'docker-compose-vps') {
+      // Use native driver — no mongosh dependency, works on Windows.
+      return mgNative.listDatabases(target.uri);
+    }
+    let cmd, env;
+    if (target.kind === 'docker-compose-vps') {
       const sudo = await resolveDockerSudo(ch, server);
       cmd = mg.mongoListDbsCommand(_mongoVpsOpts(target, sudo));
     } else {
@@ -130,15 +132,13 @@ function _mongoVpsOpts(target, sudo) {
 }
 
 async function listCollections(ch, target, server) {
-  let cmd, env;
   if (target.kind === 'external-uri') {
-    cmd = mg.mongoUriListCollectionsCommand({ dbName: target.dbName });
-    env = { MONGOURI: target.uri };
-  } else {
-    const sudo = await resolveDockerSudo(ch, server);
-    cmd = mg.mongoListCollectionsCommand(_mongoVpsOpts(target, sudo));
+    // Use native driver — no mongosh dependency, works on Windows.
+    return mgNative.listCollections(target.uri, target.dbName);
   }
-  const { stdout, stderr, exitCode } = await runCommand(ch, cmd, env);
+  const sudo = await resolveDockerSudo(ch, server);
+  const cmd = mg.mongoListCollectionsCommand(_mongoVpsOpts(target, sudo));
+  const { stdout, stderr, exitCode } = await runCommand(ch, cmd);
   if (exitCode !== 0) {
     const msg = (stderr || stdout || 'mongosh exited ' + exitCode).trim();
     throw Object.assign(new Error(msg), { code: 'MONGO_ERROR' });
@@ -147,15 +147,13 @@ async function listCollections(ch, target, server) {
 }
 
 async function queryCollection(ch, target, { collection, offset }, server) {
-  let cmd, env;
   if (target.kind === 'external-uri') {
-    cmd = mg.mongoUriQueryCollectionCommand({ dbName: target.dbName, collection, offset: offset || 0 });
-    env = { MONGOURI: target.uri };
-  } else {
-    const sudo = await resolveDockerSudo(ch, server);
-    cmd = mg.mongoQueryCollectionCommand({ ..._mongoVpsOpts(target, sudo), collection, offset: offset || 0 });
+    // Use native driver — no mongosh dependency, works on Windows.
+    return mgNative.queryCollection(target.uri, target.dbName, collection, offset || 0);
   }
-  const { stdout, stderr, exitCode } = await runCommand(ch, cmd, env);
+  const sudo = await resolveDockerSudo(ch, server);
+  const cmd = mg.mongoQueryCollectionCommand({ ..._mongoVpsOpts(target, sudo), collection, offset: offset || 0 });
+  const { stdout, stderr, exitCode } = await runCommand(ch, cmd);
   if (exitCode !== 0) {
     const msg = (stderr || stdout || 'mongosh exited ' + exitCode).trim();
     throw Object.assign(new Error(msg), { code: 'MONGO_ERROR' });

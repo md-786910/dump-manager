@@ -15,6 +15,7 @@ const { resolveDockerSudo } = require('../exec/dockerSudo');
 const { DecryptStream } = require('../crypto/stream');
 const pg = require('../db/postgres');
 const mg = require('../db/mongo');
+const mgNative = require('../db/mongoNative');
 
 // `opts`:
 //   server, target        — resolved records
@@ -135,18 +136,48 @@ async function run(opts) {
       if (!embedPassword && ins.dbPassword) execEnv = { PGPASSWORD: ins.dbPassword };
     }
   } else {
-    if (target.engine === 'mongo') {
-      command = mg.mongoUriRestoreCommand();
-      execEnv = { MONGOURI: uri };
-    } else {
+    // external-uri: postgres uses pg_restore via shell; mongo uses native driver.
+    if (target.engine !== 'mongo') {
       command = pg.uriRestoreCommand({ cleanFirst: !!cleanFirst });
       execEnv = { PGURI: uri };
     }
+    // mongo: command stays null — handled below with native channel
+  }
+
+  // Detect the dump format from the sidecar so we know which restore path to use.
+  let dumpFormat = 'mongodump_archive'; // safe default for old dumps
+  try {
+    const sidecarPath = dumpPath + '.json';
+    if (fs.existsSync(sidecarPath)) {
+      const sidecar = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
+      dumpFormat = sidecar.format || 'mongodump_archive';
+    }
+  } catch { /* ignore — fall back to default */ }
+
+  // For external-uri mongo targets use the native MongoDB driver so mongorestore
+  // doesn't need to be installed (and $MONGOURI expands correctly on Windows).
+  const isNativeMongo = target.kind === 'external-uri' && target.engine === 'mongo';
+
+  if (isNativeMongo && dumpFormat === 'mongodump_archive') {
+    // Old dump made with mongodump binary — can't restore without the CLI tool.
+    ch.end();
+    throw Object.assign(
+      new Error(
+        'This backup was created with mongodump (binary format) and cannot be restored without mongodump installed.\n' +
+        'Install MongoDB Database Tools (https://www.mongodb.com/try/download/database-tools) or create a new backup with this version of the app.'
+      ),
+      { code: 'MONGODUMP_REQUIRED' }
+    );
   }
 
   emit('starting-restore');
   try {
-    stream = await ch.exec(command, execEnv ? { env: execEnv } : undefined);
+    if (isNativeMongo) {
+      // Native restore channel — reads NDJSON from stdin, writes to MongoDB.
+      stream = mgNative.createRestoreChannel(uri, target.dbName, { dropFirst: true });
+    } else {
+      stream = await ch.exec(command, execEnv ? { env: execEnv } : undefined);
+    }
   } catch (err) {
     ch.end();
     if (aborted) throw new Error('cancelled');

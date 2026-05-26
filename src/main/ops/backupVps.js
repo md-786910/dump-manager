@@ -16,6 +16,7 @@ const { resolveDockerSudo } = require('../exec/dockerSudo');
 const { EncryptStream } = require('../crypto/stream');
 const pg = require('../db/postgres');
 const mg = require('../db/mongo');
+const mgNative = require('../db/mongoNative');
 const dumps = require('../storage/dumps');
 
 // `opts`:
@@ -153,19 +154,28 @@ async function run(opts) {
       if (!embedPassword && ins.dbPassword) execEnv = { PGPASSWORD: ins.dbPassword };
     }
   } else {
-    // external-uri — pass URI via env so it isn't visible in process listings.
-    if (target.engine === 'mongo') {
-      command = mg.mongoUriDumpCommand();
-      execEnv = { MONGOURI: uri };
-    } else {
+    // external-uri — postgres uses pg_dump via shell; mongo uses native driver
+    // (no mongodump needed, works on Windows without extra tooling).
+    if (target.engine !== 'mongo') {
       command = pg.uriDumpCommand({ compressionLevel: target.uriOpts && target.uriOpts.compressionLevel });
       execEnv = { PGURI: uri };
     }
+    // mongo: command stays null — handled below with nativeStream
   }
 
   emit('starting-dump');
+
+  // For external-uri mongo targets use the native MongoDB driver stream so
+  // mongodump doesn't need to be installed (and $MONGOURI expands correctly
+  // on Windows where cmd.exe doesn't expand POSIX $VAR syntax).
+  const isNativeMongo = target.kind === 'external-uri' && target.engine === 'mongo';
+
   try {
-    stream = await ch.exec(command, execEnv ? { env: execEnv } : undefined);
+    if (isNativeMongo) {
+      stream = mgNative.createBackupStream(uri, target.dbName);
+    } else {
+      stream = await ch.exec(command, execEnv ? { env: execEnv } : undefined);
+    }
   } catch (err) {
     ch.end();
     if (aborted) throw new Error('cancelled');
@@ -300,7 +310,9 @@ async function run(opts) {
       const meta = {
         schemaVersion: 2,
         engine: target.engine || 'postgres',
-        format: target.engine === 'mongo' ? 'mongodump_archive' : 'pg_custom',
+        format: target.engine === 'mongo'
+          ? (target.kind === 'external-uri' ? 'mongo_json_v1' : 'mongodump_archive')
+          : 'pg_custom',
         serverId: server ? server.id : null,
         serverName: server ? server.name : null,
         sourceProfileId: target.id, // legacy field name kept for sidecar compatibility

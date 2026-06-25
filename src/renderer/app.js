@@ -442,7 +442,9 @@ function renderMainPanel() {
   if (ds.length === 0) { list.innerHTML = ''; empty.hidden = false; return; }
   empty.hidden = true;
   list.innerHTML = ds.map((d) => (
-    '<li class="dump-list__item" data-path="' + escapeHtml(d.path) + '">' +
+    '<li class="dump-list__item" data-path="' + escapeHtml(d.path) + '"' +
+      ' data-engine="' + escapeHtml(d.engine || 'postgres') + '"' +
+      ' data-dump-format="' + escapeHtml(d.format || 'pg_custom') + '">' +
       '<span class="dump-list__name">' +
         escapeHtml(d.sourceProfileName || t.name) +
         '<span class="dump-list__db mono">· db: ' + escapeHtml(d.dbName || t.dbName) + '</span>' +
@@ -1560,7 +1562,7 @@ function onBackupProgress(ev) {
     b.phase = ev.phase;
     applyPhase(ev.phase);
     if (ev.phase === 'finalizing' && !b.finalizedAt) b.finalizedAt = Date.now();
-    if (ev.phase === 'done') return finishOp(true, ev.meta);
+    if (ev.phase === 'done') { finishOp(true, ev.meta); refreshAll(); return; }
     if (ev.phase === 'error') {
       finishOp(false, null, ev.error);
       showDockerSetupHelp(ev.code, ev.error);
@@ -2106,7 +2108,7 @@ async function onDumpListClick(e) {
   const dumpPath = li.dataset.path;
   const action = btn.dataset.action;
   if (action === 'delete') return onDeleteDump(dumpPath);
-  if (action === 'download') return onDownloadDump(dumpPath);
+  if (action === 'download') return onDownloadDump(dumpPath, li.dataset.engine, li.dataset.dumpFormat);
   if (action === 'restore') return openRestoreModal(dumpPath);
 }
 
@@ -2127,9 +2129,16 @@ async function onDeleteDump(dumpPath) {
   await refreshAll();
 }
 
-async function onDownloadDump(dumpPath) {
-  const format = await openDownloadFormatModal();
-  if (!format) return;
+async function onDownloadDump(dumpPath, engine, dumpFormat) {
+  let format;
+  if (engine === 'mongo') {
+    // MongoDB has one natural decrypted form — skip the format picker modal.
+    format = dumpFormat === 'mongodump_archive' ? 'archive' : 'json';
+  } else {
+    // Postgres: let the user choose .pgdump or .sql (existing modal unchanged).
+    format = await openDownloadFormatModal();
+    if (!format) return;
+  }
   const res = await window.dbm.dumps.download(dumpPath, format);
   if (res.cancelled) return;
   if (!res.ok) {
@@ -2172,7 +2181,7 @@ async function onRestoreFromFileClick() {
 
 function _detectEngineFromExtension(filePath) {
   const ext = (filePath || '').split('.').pop().toLowerCase();
-  return ext === 'archive' ? 'mongo' : 'postgres';
+  return (ext === 'archive' || ext === 'json') ? 'mongo' : 'postgres';
 }
 
 function openRestoreModalForFile(filePath) {
@@ -2186,9 +2195,9 @@ function openRestoreModalForFile(filePath) {
 
   const inferredEngine = _detectEngineFromExtension(filePath);
   const ext = (filePath || '').split('.').pop().toLowerCase();
-  const isAmbiguous = ext !== 'archive' && ext !== 'sql' && ext !== 'pgdump' && ext !== 'dump';
+  const isAmbiguous = ext !== 'archive' && ext !== 'json' && ext !== 'sql' && ext !== 'pgdump' && ext !== 'dump';
 
-  if (ext === 'archive') {
+  if (ext === 'archive' || ext === 'json') {
     $('restoreEngineField').hidden = false;
     $('restoreEngineSelect').value = 'mongo';
   } else if (isAmbiguous) {

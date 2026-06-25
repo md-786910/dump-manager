@@ -16,7 +16,7 @@ function register() {
       title: 'Choose backup file to restore',
       buttonLabel: 'Select file',
       filters: [
-        { name: 'Backup files', extensions: ['pgdump', 'dump', 'sql', 'archive'] },
+        { name: 'Backup files', extensions: ['pgdump', 'dump', 'sql', 'archive', 'json'] },
         { name: 'All files', extensions: ['*'] },
       ],
       properties: ['openFile', 'dontAddToRecent'],

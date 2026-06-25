@@ -57,7 +57,7 @@ function register({ app, keychain }) {
   });
 
   // Save a decrypted copy of the dump to a user-chosen path.
-  // format: 'pgdump' (default) → raw decrypted binary; 'sql' → plain SQL via pg_restore.
+  // format: 'pgdump' (default) | 'sql' → postgres; 'json' | 'archive' → mongo.
   ipcMain.handle('dumps:download', async (event, { dumpPath, format }) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const root = path.resolve(dumps.dumpDir(app));
@@ -66,24 +66,44 @@ function register({ app, keychain }) {
       return { ok: false, error: 'refusing to read path outside dump dir' };
     }
 
-    const asSql = format === 'sql';
-    const base = path.basename(src).replace(/\.pgdump\.enc$/, asSql ? '.sql' : '.pgdump');
+    const asSql     = format === 'sql';
+    const asJson    = format === 'json';
+    const asArchive = format === 'archive';
+    const ext = asSql ? '.sql' : asJson ? '.json' : asArchive ? '.archive' : '.pgdump';
+    const base = path.basename(src).replace(/\.(pgdump|mongodump)\.enc$/, ext);
+
+    let saveFilters;
+    if (asSql) {
+      saveFilters = [
+        { name: 'Plain SQL', extensions: ['sql'] },
+        { name: 'pg_dump custom format', extensions: ['pgdump', 'dump'] },
+        { name: 'All files', extensions: ['*'] },
+      ];
+    } else if (asJson) {
+      saveFilters = [
+        { name: 'MongoDB JSON dump', extensions: ['json'] },
+        { name: 'All files', extensions: ['*'] },
+      ];
+    } else if (asArchive) {
+      saveFilters = [
+        { name: 'MongoDB Archive dump', extensions: ['archive'] },
+        { name: 'All files', extensions: ['*'] },
+      ];
+    } else {
+      saveFilters = [
+        { name: 'pg_dump custom format', extensions: ['pgdump', 'dump'] },
+        { name: 'All files', extensions: ['*'] },
+      ];
+    }
+
     const res = await dialog.showSaveDialog(win, {
       title: 'Save decrypted dump as',
       defaultPath: base,
-      filters: asSql
-        ? [
-            { name: 'Plain SQL', extensions: ['sql'] },
-            { name: 'pg_dump custom format', extensions: ['pgdump', 'dump'] },
-            { name: 'All files', extensions: ['*'] },
-          ]
-        : [
-            { name: 'pg_dump custom format', extensions: ['pgdump', 'dump'] },
-            { name: 'All files', extensions: ['*'] },
-          ],
+      filters: saveFilters,
     });
     if (res.canceled || !res.filePath) return { ok: false, cancelled: true };
 
+    const resolvedFormat = asSql ? 'sql' : asJson ? 'json' : asArchive ? 'archive' : 'pgdump';
     const startedAt = Date.now();
     try {
       const key = keychain.ensure(app);
@@ -120,6 +140,7 @@ function register({ app, keychain }) {
           decrypt.on('error', reject);
         });
       } else {
+        // pgdump, json, archive: straight decrypt-and-write, no conversion needed.
         await pipeline(
           fs.createReadStream(src),
           new DecryptStream(key),
@@ -128,19 +149,17 @@ function register({ app, keychain }) {
       }
       audit.append(app, {
         op: 'download-dump', dumpPath: src, outPath: res.filePath,
-        format: asSql ? 'sql' : 'pgdump',
-        ok: true, durationMs: Date.now() - startedAt,
+        format: resolvedFormat, ok: true, durationMs: Date.now() - startedAt,
       });
-      logging.info('dumps', 'Decrypted dump saved' + (asSql ? ' as SQL' : ''), { src, outPath: res.filePath });
+      logging.info('dumps', 'Decrypted dump saved as ' + resolvedFormat, { src, outPath: res.filePath });
       return { ok: true, outPath: res.filePath };
     } catch (err) {
       try { if (fs.existsSync(res.filePath)) fs.unlinkSync(res.filePath); } catch {}
       audit.append(app, {
         op: 'download-dump', dumpPath: src, ok: false,
-        format: asSql ? 'sql' : 'pgdump',
-        error: err.message, durationMs: Date.now() - startedAt,
+        format: resolvedFormat, error: err.message, durationMs: Date.now() - startedAt,
       });
-      logging.error('dumps', 'Download failed: ' + err.message, { src, format: asSql ? 'sql' : 'pgdump' });
+      logging.error('dumps', 'Download failed: ' + err.message, { src, format: resolvedFormat });
       return { ok: false, error: err.message };
     }
   });

@@ -14,15 +14,18 @@ const channel = require('../exec/channel');
 const { resolveDockerSudo } = require('../exec/dockerSudo');
 const pg = require('../db/postgres');
 const mg = require('../db/mongo');
+const mgNative = require('../db/mongoNative');
 
 // Detect backup format from file extension.
 // '.sql'     → 'sql'      (plain SQL text → psql)
 // '.archive' → 'archive'  (mongodump archive → mongorestore)
+// '.json'    → 'json'     (mongo_json_v1 NDJSON → native driver restore)
 // anything else → 'pgdump' (pg_dump custom format → pg_restore)
 function detectFileFormat(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.sql') return 'sql';
   if (ext === '.archive') return 'archive';
+  if (ext === '.json') return 'json';
   return 'pgdump';
 }
 
@@ -165,9 +168,20 @@ async function run(opts) {
       if (!embedPassword && ins.dbPassword) execEnv = { PGPASSWORD: ins.dbPassword };
     }
   } else {
-    if (fileFormat === 'archive') {
-      command = mg.mongoUriRestoreCommand();
-      execEnv = { MONGOURI: uri };
+    // external-uri
+    if (fileFormat === 'json') {
+      // mongo_json_v1 NDJSON — use native driver, no mongorestore needed.
+      // command stays null; handled below via nativeChannel.
+    } else if (fileFormat === 'archive') {
+      // mongodump binary archive — can't parse without mongorestore CLI.
+      ch.end();
+      throw Object.assign(
+        new Error(
+          'This file is a mongodump binary archive and cannot be restored without mongorestore installed.\n' +
+          'Install MongoDB Database Tools (https://www.mongodb.com/try/download/database-tools) or use a .json export from this app.'
+        ),
+        { code: 'MONGODUMP_REQUIRED' }
+      );
     } else if (usePsql) {
       command = pg.uriPsqlRestoreCommand();
       execEnv = { PGURI: uri };
@@ -177,9 +191,15 @@ async function run(opts) {
     }
   }
 
+  const isNativeMongoFile = target.kind === 'external-uri' && fileFormat === 'json';
+
   emit('starting-restore');
   try {
-    stream = await ch.exec(command, execEnv ? { env: execEnv } : undefined);
+    if (isNativeMongoFile) {
+      stream = mgNative.createRestoreChannel(uri, target.dbName, { dropFirst: true });
+    } else {
+      stream = await ch.exec(command, execEnv ? { env: execEnv } : undefined);
+    }
   } catch (err) {
     ch.end();
     if (aborted) throw new Error('cancelled');

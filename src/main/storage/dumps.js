@@ -1,8 +1,8 @@
 'use strict';
 
 // Dump files live in the user-configured folder (settings.dumpsDir) or, if
-// unset, in <userData>/dumps. Each dump is two files: <name>.pgdump.enc plus
-// a <name>.json sidecar with metadata. Listing is a directory scan of sidecars.
+// unset, in <userData>/dumps. Each dump is two files: <name>.<pgdump|mongodump>.enc
+// plus a <name>.json sidecar with metadata. Listing is a directory scan of sidecars.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -24,7 +24,8 @@ function buildDumpName(profile, when) {
   const ts = when.toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z');
   const safeName = profile.name.replace(/[^A-Za-z0-9._-]+/g, '_');
   const safeDb = profile.dbName.replace(/[^A-Za-z0-9._-]+/g, '_');
-  return safeName + '__' + safeDb + '__' + ts + '.pgdump.enc';
+  const ext = profile.engine === 'mongo' ? '.mongodump.enc' : '.pgdump.enc';
+  return safeName + '__' + safeDb + '__' + ts + ext;
 }
 
 function sidecarPath(dumpPath) { return dumpPath + '.json'; }
@@ -38,7 +39,7 @@ function list(app) {
   if (!fs.existsSync(d)) return [];
   const out = [];
   for (const entry of fs.readdirSync(d)) {
-    if (!entry.endsWith('.pgdump.enc.json')) continue;
+    if (!entry.endsWith('.pgdump.enc.json') && !entry.endsWith('.mongodump.enc.json')) continue;
     const sidecar = path.join(d, entry);
     let meta;
     try { meta = JSON.parse(fs.readFileSync(sidecar, 'utf8')); }
@@ -57,7 +58,7 @@ function remove(dumpPath) {
   if (fs.existsSync(sc)) fs.unlinkSync(sc);
 }
 
-// Move every <name>.pgdump.enc + sidecar from `fromDir` into `toDir`.
+// Move every <name>.(pgdump|mongodump).enc + sidecar from `fromDir` into `toDir`.
 // Tries rename first (fast, atomic on same volume); on EXDEV (cross-device)
 // falls back to copy + unlink. Returns { moved, errors }.
 function migrate(fromDir, toDir) {
@@ -66,7 +67,8 @@ function migrate(fromDir, toDir) {
   const errors = [];
   if (!fs.existsSync(fromDir)) return { moved, errors };
   for (const entry of fs.readdirSync(fromDir)) {
-    if (!entry.endsWith('.pgdump.enc') && !entry.endsWith('.pgdump.enc.json')) continue;
+    if (!entry.endsWith('.pgdump.enc') && !entry.endsWith('.pgdump.enc.json') &&
+        !entry.endsWith('.mongodump.enc') && !entry.endsWith('.mongodump.enc.json')) continue;
     const src = path.join(fromDir, entry);
     const dst = path.join(toDir, entry);
     try {

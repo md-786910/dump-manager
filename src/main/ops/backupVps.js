@@ -56,7 +56,7 @@ async function run(opts) {
   const startedAt = new Date();
   const dumpFile = path.join(
     dumps.dumpDir(userDataApp),
-    dumps.buildDumpName({ name: target.name, dbName: target.dbName }, startedAt),
+    dumps.buildDumpName({ name: target.name, dbName: target.dbName, engine: target.engine }, startedAt),
   );
 
   const emit = (phase, extra) => { if (onProgress) try { onProgress({ phase, ...(extra || {}) }); } catch {} };
